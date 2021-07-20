@@ -1,0 +1,75 @@
+Arch:
+  input_dim: 5
+  num_classes: 4
+Data:
+  labeled_data_ratio: 1
+  name: acdc
+  unlabeled_data_ratio: 0.0
+EntropyMinParameters:
+  weight: 1.0e-05
+GITHASH: c7f20d89af677d26cb1da41213c2a1038f0dd537
+IICRegParameters:
+  DecoderParams:
+    head_types: linear
+    normalize: false
+    num_clusters: 20
+    num_subheads: 5
+  EncoderParams:
+    head_types: linear
+    normalize: false
+    num_clusters: 20
+    num_subheads: 5
+  LossParams:
+    paddings:
+    - 1
+    - 3
+    patch_sizes: 1024
+  weight: 0.1
+Iterations:
+  num_iter: 1
+LabeledData:
+  batch_size: 5
+  num_workers: 5
+  shuffle: true
+MIDLPaperParameters:
+  iic_weight: 0.1
+  padding: 1
+  patch_size: 1024
+MeanTeacherParameters:
+  alpha: 0.999
+  name: mse
+  weight: 10
+  weight_decay: 1.0e-06
+Optim:
+  lr: 1.0e-07
+  name: Adam
+  weight_decay: 1.0e-05
+RandomSeed: 10
+Scheduler:
+  multiplier: 400
+  warmup_max: 10
+Trainer:
+  device: cuda
+  feature_importance:
+  - 1
+  - 0.5
+  - 0.5
+  feature_names:
+  - Conv5
+  - Up_conv3
+  - Up_conv2
+  max_epoch: 100
+  name: full
+  num_batches: 500
+  save_dir: tmp
+UDARegCriterion:
+  name: mse
+  weight: 5.0
+UnlabeledData:
+  batch_size: 10
+  num_workers: 4
+  shuffle: true
+ValidationData:
+  batch_size: 5
+  num_workers: 1
+  shuffle: true
