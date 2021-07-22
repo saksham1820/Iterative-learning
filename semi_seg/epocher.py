@@ -49,7 +49,7 @@ class EvalEpocher(_num_class_mixin, _Epocher):
 
     @torch.no_grad()
     def _run(self, *args, **kwargs) -> Tuple[EpochResultDict, float]:
-        self._model.eval()
+        self._model.train()
         report_dict = EpochResultDict()
         for i, val_data in zip(self._indicator, self._val_loader):
             val_img, val_target, file_path, _, group = self._unzip_data(val_data, self._device)
