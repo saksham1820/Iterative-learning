@@ -58,7 +58,7 @@ class EvalEpocher(_num_class_mixin, _Epocher):
             if self._num_iter != 0:
                 for ITER in range(self._num_iter):
                     if ITER == 0:
-                        Y_0_val = torch.zeros(val_img_dims[0], self._model.num_classes, val_img_dims[2], val_img_dims[3]).to(self.device, non_blocking=True)
+                        Y_0_val = torch.ones(val_img_dims[0], self._model.num_classes, val_img_dims[2], val_img_dims[3]).to(self.device, non_blocking=True)
                         val_concat = torch.cat([Y_0_val, val_img], dim = 1)
                     else:
                         val_concat = torch.cat([val_logits, val_img], dim=1)
@@ -67,7 +67,6 @@ class EvalEpocher(_num_class_mixin, _Epocher):
                 val_logits = self._model(val_img)
 
             onehot_target = class2one_hot(val_target.squeeze(1), self.num_classes)
-
             val_loss = self._sup_criterion(val_logits.softmax(1), onehot_target, disable_assert=True)
 
             self.meters["loss"].add(val_loss.item())
@@ -239,7 +238,7 @@ class FullEpocher(_num_class_mixin, _Epocher):
             if self._num_iter != 0:
                 for ITER in range(self._num_iter):
                     if ITER == 0:
-                        Y_0 = torch.zeros(labeled_image_dims[0],
+                        Y_0 = torch.ones(labeled_image_dims[0],
                                           self._model.num_classes,
                                           labeled_image_dims[2], labeled_image_dims[3]).to(self.device, non_blocking = True)
                         concat = torch.cat([Y_0, labeled_image], dim = 1)
