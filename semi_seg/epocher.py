@@ -54,6 +54,9 @@ class EvalEpocher(_num_class_mixin, _Epocher):
         for i, val_data in zip(self._indicator, self._val_loader):
             val_img, val_target, file_path, _, group = self._unzip_data(val_data, self._device)
 
+            alpha = 0.5
+            val_agg = 0
+            val_img, val_target, file_path, _, group = self._unzip_data(val_data, self._device)
             val_img_dims = val_img.shape
             if self._num_iter != 0:
                 for ITER in range(self._num_iter):
@@ -62,15 +65,16 @@ class EvalEpocher(_num_class_mixin, _Epocher):
                         val_concat = torch.cat([Y_0_val, val_img], dim = 1)
                     else:
                         val_concat = torch.cat([val_logits, val_img], dim=1)
-                    val_logits = self._model(val_concat)
+                    val_logits = self._model(val_concat).softmax(1)
+                    val_agg = val_agg + pow(alpha, ITER)*val_logits
             else:
                 val_logits = self._model(val_img)
 
             onehot_target = class2one_hot(val_target.squeeze(1), self.num_classes)
-            val_loss = self._sup_criterion(val_logits.softmax(1), onehot_target, disable_assert=True)
+            val_loss = self._sup_criterion(val_agg.softmax(1), onehot_target, disable_assert=True)
 
             self.meters["loss"].add(val_loss.item())
-            self.meters["dice"].add(val_logits.max(1)[1], val_target.squeeze(1), group_name=group)
+            self.meters["dice"].add(val_agg.max(1)[1], val_target.squeeze(1), group_name=group)
             report_dict = self.meters.tracking_status()
             self._indicator.set_postfix_dict(report_dict)
         return report_dict, self.meters["dice"].summary()["DSC_mean"]
@@ -235,23 +239,34 @@ class FullEpocher(_num_class_mixin, _Epocher):
                 self._unzip_data(labeled_data, self._device)
                 #(5, 1, 224, 224) -> labeled_image.shape
             labeled_image_dims = labeled_image.shape
+            alpha = 0.5
+            train_agg = 0
             if self._num_iter != 0:
                 for ITER in range(self._num_iter):
                     if ITER == 0:
                         Y_0 = torch.ones(labeled_image_dims[0],
-                                          self._model.num_classes,
-                                          labeled_image_dims[2], labeled_image_dims[3]).to(self.device, non_blocking = True).softmax(1)
-                        concat = torch.cat([Y_0, labeled_image], dim = 1)
+                                             self._model.num_classes,
+                                             labeled_image_dims[2], labeled_image_dims[3]).to(self.device,
+                                                                                              non_blocking=True).softmax(
+                                1)
+                        concat = torch.cat([Y_0, labeled_image], dim=1)
                     else:
-                        concat = torch.cat([predict_logits, labeled_image], dim=1)
-                    predict_logits = self._model(concat)
+                        concat = torch.cat([train_agg, labeled_image], dim=1)
+                    predict_logits = self._model(concat).softmax(1)
+                    train_agg = train_agg + pow(alpha, ITER) * predict_logits
+
+                        # TODO : Check both possibilities:
+                        #       1. Aggregate segmentation from each iteration
+                        #          but while iterating only use the segmentation and not the agg
+                        #       2. Aggregate segmentation from each iteration but while iterating,
+                        #          use the agg to combine with input
             else:
                 predict_logits = self._model(labeled_image)
                 #(5, 4, 224, 224) -> predict_logits.shape
 
             # supervised part
             onehot_target = class2one_hot(labeled_target.squeeze(1), self.num_classes)
-            sup_loss = self._sup_criterion(predict_logits.softmax(1), onehot_target)
+            sup_loss = self._sup_criterion(train_agg.softmax(1), onehot_target)
 
             total_loss = sup_loss
             # gradient backpropagation
@@ -261,7 +276,7 @@ class FullEpocher(_num_class_mixin, _Epocher):
             # recording can be here or in the regularization method
             with torch.no_grad():
                 self.meters["sup_loss"].add(sup_loss.item())
-                self.meters["sup_dice"].add(predict_logits.max(1)[1], labeled_target.squeeze())
+                self.meters["sup_dice"].add(train_agg.max(1)[1], labeled_target.squeeze())
                 report_dict = self.meters.tracking_status()
                 self._indicator.set_postfix_dict(report_dict)
         return report_dict
