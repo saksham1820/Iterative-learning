@@ -12,6 +12,9 @@ Optim:
 Iterations:
   num_iter : 5
 
+Aggregator:
+  alpha : 0.9
+
 Scheduler:
   multiplier: 400
   warmup_max: 10

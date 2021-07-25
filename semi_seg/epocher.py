@@ -31,11 +31,12 @@ class _num_class_mixin:
 
 class EvalEpocher(_num_class_mixin, _Epocher):
 
-    def __init__(self, num_iter: int, model: Union[Model, nn.Module], val_loader: T_loader, sup_criterion: T_loss, cur_epoch=0,
+    def __init__(self, alpha: float, num_iter: int, model: Union[Model, nn.Module], val_loader: T_loader, sup_criterion: T_loss, cur_epoch=0,
                  device="cpu") -> None:
         assert isinstance(val_loader, DataLoader), \
             f"val_loader should be an instance of DataLoader, given {val_loader.__class__.__name__}."
         super().__init__(model, num_batches=len(val_loader), cur_epoch=cur_epoch, device=device)
+        self._alpha = alpha
         self._num_iter = num_iter
         self._val_loader = val_loader
         self._sup_criterion = sup_criterion
@@ -54,7 +55,7 @@ class EvalEpocher(_num_class_mixin, _Epocher):
         for i, val_data in zip(self._indicator, self._val_loader):
             val_img, val_target, file_path, _, group = self._unzip_data(val_data, self._device)
 
-            alpha = 0.5
+            alpha = self._alpha
             val_agg = 0
             val_img, val_target, file_path, _, group = self._unzip_data(val_data, self._device)
             val_img_dims = val_img.shape
@@ -211,10 +212,11 @@ class TrainEpocher(_num_class_mixin, _Epocher):
 
 class FullEpocher(_num_class_mixin, _Epocher):
 
-    def __init__(self, num_iter: int, model: Union[Model, nn.Module], optimizer: T_optim, labeled_loader: T_loader,
+    def __init__(self, alpha: float, num_iter: int, model: Union[Model, nn.Module], optimizer: T_optim, labeled_loader: T_loader,
                  sup_criterion: T_loss, cur_epoch=0,
                  device="cpu") -> None:
         super().__init__(model = model, num_batches = len(labeled_loader), cur_epoch = cur_epoch, device = device)
+        self._alpha = alpha
         self._num_iter = num_iter
         self._optimizer = optimizer
         self._labeled_loader = labeled_loader
@@ -239,7 +241,7 @@ class FullEpocher(_num_class_mixin, _Epocher):
                 self._unzip_data(labeled_data, self._device)
                 #(5, 1, 224, 224) -> labeled_image.shape
             labeled_image_dims = labeled_image.shape
-            alpha = 0.5
+            alpha = self._alpha
             train_agg = 0
             if self._num_iter != 0:
                 for ITER in range(self._num_iter):

@@ -48,7 +48,8 @@ trainer_name = config["Trainer"].pop("name")
 Trainer = trainer_zoos[trainer_name]
 model = UNet(**config["Arch"])
 trainer = Trainer(
-    model=model, labeled_loader=train_loader, num_iter = config["Iterations"]["num_iter"],
+    model=model, labeled_loader=train_loader, alpha = config["Aggregator"]["alpha"],
+    num_iter = config["Iterations"]["num_iter"],
     val_loader=val_loader, sup_criterion=KL_div(),
     configuration={**cmanager.config, **{"GITHASH": cur_githash}},
     **config["Trainer"]
