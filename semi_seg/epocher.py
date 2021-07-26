@@ -65,7 +65,7 @@ class EvalEpocher(_num_class_mixin, _Epocher):
                         Y_0_val = torch.ones(val_img_dims[0], self._model.num_classes, val_img_dims[2], val_img_dims[3]).to(self.device, non_blocking=True).softmax(1)
                         val_concat = torch.cat([Y_0_val, val_img], dim = 1)
                     else:
-                        val_concat = torch.cat([val_logits, val_img], dim=1)
+                        val_concat = torch.cat([val_agg, val_img], dim=1)
                     val_logits = self._model(val_concat).softmax(1)
                     val_agg = val_agg + pow(alpha, ITER)*val_logits
             else:
