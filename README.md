@@ -14,8 +14,9 @@ conda create -p ./venv python=3.7
 
 conda activate ./venv
 
-conda install pytorch ==1.6.0 torchvision==0.7.0 cudatoolkit=10.2 -c pytorch  # install pytorch 1.6.0
+conda install pytorch==1.6.0 torchvision==0.7.0 cudatoolkit=10.2 -c pytorch  # install pytorch 1.6.0
 pip install deepclustering2-2.0.0-py3-none-any.whl
+pip install tqdm==4.50.0
 python setup.py install  
 # all packages should be set properly automatically.
 ```
@@ -42,7 +43,7 @@ Please refer to the default configuration in `config/semi.yaml` all set of contr
 
 ---------------------
 ##### Performance
-Yet to be confirmed.
+Yet to be confirmed.git
 
 
 
