@@ -24,13 +24,17 @@ In case of failure of running the experiments, please refer to `requirement.txt`
 ----------------
 ##### Basic script to start training 
 ```bash
-cd semi_seg
-# our proposed method
-python main.py  Data.labeled_data_ratio=0.05  Data.unlabeled_data_ratio=0.95  Trainer.num_batches=300  Trainer.max_epoch=100  Data.name=acdc  Arch.num_classes=4  Optim.lr=0.0000001000 Trainer.name=udaiic Trainer.save_dir=udaiic/10.0_0.1  IICRegParameters.weight=0.1 UDARegCriterion.weight=10.0 
-# ps baseline (lower bound)
-python main.py  Data.labeled_data_ratio=0.05  Data.unlabeled_data_ratio=0.95  Trainer.num_batches=300  Trainer.max_epoch=100  Data.name=acdc  Arch.num_classes=4  Optim.lr=0.0000001000 Trainer.name=partial Trainer.save_dir=ps  
-# fs baseline (upper bound)
-python main.py  Data.labeled_data_ratio=1.0  Data.unlabeled_data_ratio=0.0  Trainer.num_batches=300  Trainer.max_epoch=100  Data.name=acdc  Arch.num_classes=4  Optim.lr=0.0000001000 Trainer.name=partial Trainer.save_dir=fs  
+# for num_iter = 1
+python main.py Arch.input_dim=5 Iterations.num_iter=1 Aggregator.alpha=0.9
+# for num_iter = 2
+python main.py Arch.input_dim=5 Iterations.num_iter=2 Aggregator.alpha=0.9
+# for num_iter = 3
+python main.py Arch.input_dim=5 Iterations.num_iter=3 Aggregator.alpha=0.9
+# for num_iter = 4
+python main.py Arch.input_dim=5 Iterations.num_iter=4 Aggregator.alpha=0.9
+# for num_iter = 5
+python main.py Arch.input_dim=5 Iterations.num_iter=5 Aggregator.alpha=0.9  
+
 ```
 One can change the parameters on the cmd if needed.
 Please refer to the default configuration in `config/semi.yaml` all set of controllable hyperparameters. All of them can be changed using cmd as above.
@@ -38,8 +42,7 @@ Please refer to the default configuration in `config/semi.yaml` all set of contr
 
 ---------------------
 ##### Performance
-Based on different random seed, the ACDC performance varies within 1% in terms of DSC. Above scripts gives a DSC of ~85.5% for our proposed method vs 62.0% for ps and 89.2% for fs.
-
+Yet to be confirmed.
 
 
 
