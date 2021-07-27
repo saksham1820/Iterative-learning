@@ -1,4 +1,3 @@
-
 from scipy.sparse import issparse  # noqa
 
 _ = issparse  # noqa
@@ -33,13 +32,13 @@ tra_dataset = ACDCDataset(root_dir=DATA_PATH, mode="train", transforms=tra_trans
 val_dataset = ACDCDataset(root_dir=DATA_PATH, mode="val", transforms=val_transforms, verbose=True)
 
 train_loader = DataLoader(tra_dataset,
-                          batch_size = config["LabeledData"]["batch_size"],
-                          num_workers = config["LabeledData"]["num_workers"],
-                          shuffle = True)
+                          batch_size=config["LabeledData"]["batch_size"],
+                          num_workers=config["LabeledData"]["num_workers"],
+                          shuffle=True, pin_memory=True)
 val_loader = DataLoader(val_dataset,
-                        batch_size = config["ValidationData"]["batch_size"],
-                        num_workers = config["ValidationData"]["num_workers"])
-
+                        batch_size=config["ValidationData"]["batch_size"],
+                        num_workers=config["ValidationData"]["num_workers"],
+                        pin_memory=True)
 
 # set reproducibility
 set_benchmark(config.get("RandomSeed", 1))
@@ -48,8 +47,8 @@ trainer_name = config["Trainer"].pop("name")
 Trainer = trainer_zoos[trainer_name]
 model = UNet(**config["Arch"])
 trainer = Trainer(
-    model=model, labeled_loader=train_loader, alpha = config["Aggregator"]["alpha"],
-    num_iter = config["Iterations"]["num_iter"],
+    model=model, labeled_loader=train_loader, alpha=config["Aggregator"]["alpha"],
+    num_iter=config["Iterations"]["num_iter"],
     val_loader=val_loader, sup_criterion=KL_div(),
     configuration={**cmanager.config, **{"GITHASH": cur_githash}},
     **config["Trainer"]
@@ -60,4 +59,3 @@ if checkpoint is not None:
     trainer.load_state_dict_from_path(checkpoint, strict=False)
 trainer.start_training()
 # trainer.inference(checkpoint=checkpoint)
-

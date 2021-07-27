@@ -1,0 +1,5 @@
+.data
+.mypy_cache
+semi_seg/runs
+venv
+.idea
