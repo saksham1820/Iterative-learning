@@ -52,22 +52,20 @@ class EvalEpocher(_num_class_mixin, _Epocher):
     def _run(self, *args, **kwargs) -> Tuple[EpochResultDict, float]:
         self._model.train()
         report_dict = EpochResultDict()
+
         for i, val_data in zip(self._indicator, self._val_loader):
             val_img, val_target, file_path, _, group = self._unzip_data(val_data, self._device)
-
-            alpha = self._alpha
-            val_agg = 0
-            val_img, val_target, file_path, _, group = self._unzip_data(val_data, self._device)
             val_img_dims = val_img.shape
+            val_agg = 0
             if self._num_iter != 0:
                 for ITER in range(self._num_iter):
                     if ITER == 0:
                         Y_0_val = torch.ones(val_img_dims[0], self._model.num_classes, val_img_dims[2], val_img_dims[3]).to(self.device, non_blocking=True).softmax(1)
                         val_concat = torch.cat([Y_0_val, val_img], dim = 1)
                     else:
-                        val_concat = torch.cat([val_agg, val_img], dim=1)
+                        val_concat = torch.cat([val_logits, val_img], dim=1)
                     val_logits = self._model(val_concat).softmax(1)
-                    val_agg = val_agg + pow(alpha, ITER)*val_logits
+                    val_agg = self._alpha*val_agg + (1 - self._alpha)*val_logits
             else:
                 val_logits = self._model(val_img)
 
@@ -255,7 +253,7 @@ class FullEpocher(_num_class_mixin, _Epocher):
                     else:
                         concat = torch.cat([train_agg, labeled_image], dim=1)
                     predict_logits = self._model(concat).softmax(1)
-                    train_agg = train_agg + pow(alpha, ITER) * predict_logits
+                    train_agg = (alpha)*train_agg + (1-alpha)*predict_logits
 
                         # TODO : Check both possibilities:
                         #       1. Aggregate segmentation from each iteration
