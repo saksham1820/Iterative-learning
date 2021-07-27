@@ -65,6 +65,7 @@ class EvalEpocher(_num_class_mixin, _Epocher):
                     else:
                         val_concat = torch.cat([val_logits, val_img], dim=1)
                     val_logits = self._model(val_concat).softmax(1)
+                    
                     val_agg = self._alpha*val_agg + (1 - self._alpha)*val_logits
             else:
                 val_logits = self._model(val_img)
@@ -253,6 +254,7 @@ class FullEpocher(_num_class_mixin, _Epocher):
                     else:
                         concat = torch.cat([train_agg, labeled_image], dim=1)
                     predict_logits = self._model(concat).softmax(1)
+
                     train_agg = (alpha)*train_agg + (1-alpha)*predict_logits
 
                         # TODO : Check both possibilities:
