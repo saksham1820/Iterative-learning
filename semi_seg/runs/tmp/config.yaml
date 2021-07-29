@@ -1,5 +1,5 @@
 Aggregator:
-  alpha: 0.05
+  alpha: 0.005
 Arch:
   input_dim: 5
   num_classes: 4
@@ -9,7 +9,7 @@ Data:
   unlabeled_data_ratio: 0.0
 EntropyMinParameters:
   weight: 1.0e-05
-GITHASH: d31bf57e72d6ded62002275ce0bd130d8482b1fb
+GITHASH: 7199337d96b162f220fdbc734bb7dfa80ad3fec8
 IICRegParameters:
   DecoderParams:
     head_types: linear
