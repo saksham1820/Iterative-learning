@@ -1,5 +1,5 @@
 Aggregator:
-  alpha: 0
+  alpha: 0.05
 Arch:
   input_dim: 5
   num_classes: 4
@@ -9,7 +9,7 @@ Data:
   unlabeled_data_ratio: 0.0
 EntropyMinParameters:
   weight: 1.0e-05
-GITHASH: 78cbbd2cd4c47538072b8bc59b469fce8f5d9d57
+GITHASH: d31bf57e72d6ded62002275ce0bd130d8482b1fb
 IICRegParameters:
   DecoderParams:
     head_types: linear
@@ -43,7 +43,7 @@ MeanTeacherParameters:
   weight: 10
   weight_decay: 1.0e-06
 Optim:
-  lr: 1.0e-07
+  lr: 5.0e-07
   name: Adam
   weight_decay: 1.0e-05
 RandomSeed: 10
@@ -60,7 +60,7 @@ Trainer:
   - Conv5
   - Up_conv3
   - Up_conv2
-  max_epoch: 100
+  max_epoch: 50
   name: full
   num_batches: 500
   save_dir: tmp
