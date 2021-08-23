@@ -1,5 +1,5 @@
 Aggregator:
-  alpha: 0.005
+  alpha: 0.9
 Arch:
   input_dim: 5
   num_classes: 4
@@ -9,7 +9,7 @@ Data:
   unlabeled_data_ratio: 0.0
 EntropyMinParameters:
   weight: 1.0e-05
-GITHASH: f9f522e155960efcb96073579ef74d798ea66589
+GITHASH: 22842bdebc0128e91ed1f1b1fce9e87ba969ee96
 IICRegParameters:
   DecoderParams:
     head_types: linear
@@ -28,7 +28,7 @@ IICRegParameters:
     patch_sizes: 1024
   weight: 0.1
 Iterations:
-  num_iter: 2
+  num_iter: 5
 LabeledData:
   batch_size: 5
   num_workers: 5
