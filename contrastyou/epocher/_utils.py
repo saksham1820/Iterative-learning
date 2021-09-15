@@ -27,10 +27,20 @@ def preprocess_input_with_twice_transformation(data, device, non_blocking=True):
         to_device(data[0], device, non_blocking), data[1], data[2], data[3]
     return (image, target), (image_tf, target_tf), filename, partition_list, group_list
 
+def preprocess_input_with_twice_transformation_for_exp2(data, device, non_blocking=True):
+    [(image, target)], filename, partition_list, group_list = \
+        to_device(data[0], device, non_blocking), data[1], data[2], data[3]
+    return (image, target), filename, partition_list, group_list
+
 
 def preprocess_input_with_single_transformation(data, device, non_blocking=True):
     return data[0][0].to(device, non_blocking=non_blocking), data[0][1].to(device, non_blocking=non_blocking), data[1], \
            data[2], data[3]
+
+def preprocess_input_with_single_transformation_for_test(data, device, non_blocking=True):
+    return data[0][0][0].to(device, non_blocking=non_blocking), data[0][0][1].to(device, non_blocking=non_blocking), data[1], \
+           data[2], data[3]
+
 
 
 def unfold_position(features: torch.Tensor, partition_num=(4, 4), ):

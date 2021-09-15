@@ -80,23 +80,27 @@ class EvalEpocher(_num_class_mixin, _Epocher):
 
         for i, val_data in zip(self._indicator, self._val_loader):
             val_img, val_target, file_path, _, group = self._unzip_data(val_data, self._device)
-            write_img_target(val_img, val_target, save_dir_base, file_path)
             val_img_dims = val_img.shape
+            #write_img_target(val_img[:,-1,:,:].reshape(val_img_dims[0], 1, 224, 224), val_target, save_dir_base, file_path)
             alpha = self._alpha
-            uniform_dis = torch.ones(val_img_dims[0], self._model.num_classes, *val_img_dims[2:],
-                                     device=self.device).softmax(1)
-            aggregated_simplex = val_img
-                #iter_loss = 0
+            #uniform_dis = torch.ones(val_img_dims[0], self._model.num_classes, *val_img_dims[2:],
+            #                         device=self.device).softmax(1)
+            aggregated_simplex = None
+            iter_loss = 0
             onehot_target = class2one_hot(val_target.squeeze(1), self.num_classes)
             for ITER in range(self._num_iter):
-                concat = torch.cat([aggregated_simplex, uniform_dis], dim=1)
+                #concat = torch.cat([aggregated_simplex, uniform_dis], dim=1)
                 #concat = torch.cat([val_img, aggregated_simplex], dim=1)
-
+                if ITER ==0:
+                    concat = val_img
+                else:
+                    concat = torch.cat([val_img[:,-1,:,:].reshape(val_img_dims[0], 1, 224, 224),
+                                        aggregated_simplex], dim=1)
                 cur_predict = self._model(concat).softmax(1)
                 with torch.no_grad():
                     self.meters[f"itrdice_{ITER}"].add(cur_predict.max(1)[1], val_target.squeeze())
                 if ITER == 0:
-                    aggregated_simplex = cur_predict.max(1)[1].reshape(val_img_dims[0], 1, *val_img_dims[2:])
+                    aggregated_simplex = cur_predict
                     save_dir = save_dir_base + str(self._cur_epoch) + '/iter0/'
                     #write_predict(cur_predict, save_dir, file_path)
                 else:
@@ -104,7 +108,7 @@ class EvalEpocher(_num_class_mixin, _Epocher):
                     save_dir = save_dir_base + str(self._cur_epoch) + '/iter1/'
                     #write_predict(cur_predict, save_dir, file_path)
 
-            iter_loss = self._sup_criterion(aggregated_simplex.softmax(1), onehot_target,
+                iter_loss = iter_loss + self._sup_criterion(aggregated_simplex.softmax(1), onehot_target,
                                             disable_assert=True)
 
             self.meters["loss"].add(iter_loss.item())
@@ -182,8 +186,7 @@ class InferenceEpocher(EvalEpocher):
     def _run(self, *args, **kwargs) -> Tuple[EpochResultDict, float]:
         self._model.eval()
         assert self._model.training is False, self._model.training
-
-        for i, val_data in zip(self._indicator, self._test_loader):
+        for i, val_data in zip(self._indicator, self._val_loader):
             val_img, val_target, file_path, _, group = self._unzip_data(val_data, self._device)
             val_logits = self._model(val_img).softmax(1)
             # write image
@@ -329,9 +332,7 @@ class IterativeEpocher(_num_class_mixin, _Epocher):
         self._model.train()
         assert self._model.training, self._model.training
         report_dict = {}
-        save_dir_base = '/home/saksham/Iterative-learning/.data/ACDC_contrast/evolution_train/'
-        save_dir_base_target = '/home/saksham/Iterative-learning/.data/ACDC_contrast/evolution_train/targets'
-        save_dir_base_image = '/home/saksham/Iterative-learning/.data/ACDC_contrast/evolution_train/images'
+
 
         for i, labeled_data in zip(self._indicator, self._labeled_loader):
             labeled_image, labeled_target, labeled_filename, _, label_group = \
@@ -339,26 +340,27 @@ class IterativeEpocher(_num_class_mixin, _Epocher):
                     #(5, 1, 224, 224) -> labeled_image.shape
             labeled_image_dims = labeled_image.shape
             alpha = self._alpha
-            uniform_dis = torch.ones(labeled_image_dims[0], self._model.num_classes, *labeled_image_dims[2:],
-                                     device=self.device).softmax(1)
-            aggregated_simplex = labeled_image
-            #iter_loss = 0
+            #uniform_dis = torch.ones(labeled_image_dims[0], self._model.num_classes, *labeled_image_dims[2:],
+            #                         device=self.device).softmax(1)
+            aggregated_simplex = None
+            iter_loss = 0
             onehot_target = class2one_hot(labeled_target.squeeze(1), self.num_classes)
             for ITER in range(self._num_iter):
-                #breakpoint()
-                concat = torch.cat([aggregated_simplex, uniform_dis], dim=1)
-                #concat = torch.cat([labeled_image, aggregated_simplex], dim=1)
+                #concat = torch.cat([aggregated_simplex, uniform_dis], dim=1)
+                if ITER ==0:
+                    concat = labeled_image
+                else:
+                    concat = torch.cat([labeled_image[:,-1,:,:].reshape(labeled_image_dims[0], 1, 224, 224),
+                                        aggregated_simplex], dim=1)
                 cur_predict = self._model(concat).softmax(1)
                 with torch.no_grad():
                     self.meters[f"itrdice_{ITER}"].add(cur_predict.max(1)[1], labeled_target.squeeze())
                 if ITER == 0:
-                    aggregated_simplex = cur_predict.max(1)[1].reshape(labeled_image_dims[0],
-                                                                       1,
-                                                                       *labeled_image_dims[2:])
+                    aggregated_simplex = cur_predict
                 else:
                     aggregated_simplex = alpha * aggregated_simplex + (1 - alpha) * cur_predict
 
-            iter_loss = self._sup_criterion(aggregated_simplex.softmax(1), onehot_target)
+                iter_loss = iter_loss + self._sup_criterion(aggregated_simplex, onehot_target)
 
             # supervised part
             total_loss = iter_loss

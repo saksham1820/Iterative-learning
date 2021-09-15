@@ -1,8 +1,35 @@
+"""
+        if self._exp:
+            if self._tod == 'train':
+                mask_path = self._root_dir + '/train/teacher/preds/' + filename + '.png.npy'
+                mask = np.load(mask_path)
+                mask_channel = [mask[i, :, :] for i in range(4)]
+                mask_pil = [Image.fromarray((mask_channel[i] * 255).astype(np.uint8)) for i in range(4)]
+                data = self._transform(imgs=[mask_pil[0], mask_pil[1], mask_pil[2], mask_pil[3], img_png],
+                                       targets=[target_png])
+                transformed_mask = torch.cat([data[0].pop(0) for _ in range(4)])
+                transformed_mask_tf = torch.cat([data[1].pop(0) for _ in range(4)])
+                data = [[torch.cat([transformed_mask, data[0][0]]), data[0][1]],
+                        [torch.cat([transformed_mask_tf, data[1][0]]), data[1][1]]]
+                breakpoint()
+            elif self._tod == 'val':
+                mask_path = self._root_dir + '/val/val_masks/' + filename + '.npy'
+                mask = np.load(mask_path)
+                mask_channel = [mask[i, :, :] for i in range(4)]
+                mask_pil = [Image.fromarray((mask_channel[i] * 255).astype(np.uint8)) for i in range(4)]
+                data = self._transform(imgs = [mask_pil[0], mask_pil[1], mask_pil[2], mask_pil[3], img_png],
+                                       targets = [target_png])
+                transformed_mask = torch.cat([data.pop(0) for _ in range(4)])
+                data = [torch.cat([transformed_mask, data[0]]), data[1]]
+        else:
+"""#TODO:add this block below and then perform iterative segmentation
 import os
 import re
 from pathlib import Path
 from typing import List, Tuple, Union
-
+import matplotlib.pyplot as plt
+import torch
+from PIL import Image
 import numpy as np
 from torch import Tensor
 
@@ -16,17 +43,43 @@ class ACDCDataset(ContrastDataset, _ACDCDataset):
     zip_name = "ACDC_contrast.zip"
     folder_name = "ACDC_contrast"
 
-    def __init__(self, root_dir: str, mode: str, transforms: SequentialWrapper = SequentialWrapper(),
+    def __init__(self, tod, exp, root_dir: str, mode: str, transforms: SequentialWrapper = SequentialWrapper(),
                  verbose=True, *args, **kwargs) -> None:
         super().__init__(root_dir, mode, ["img", "gt"], transforms, verbose)
         self._acdc_info = np.load(os.path.join(self._root_dir, "acdc_info.npy"), allow_pickle=True).item()
         assert isinstance(self._acdc_info, dict) and len(self._acdc_info) == 200
+        self._tod = tod
+        self._exp = exp
         self._transform = transforms
 
     def __getitem__(self, index) -> Tuple[List[Tensor], str, str, str]:
         [img_png, target_png], filename_list = self._getitem_index(index)
         filename = Path(filename_list[0]).stem
-        data = self._transform(imgs=[img_png], targets=[target_png])
+        #add the block here
+        if self._exp:
+            if self._tod == 'train':
+                mask_path = self._root_dir + '/train/train_masks_from_teacher/preds/' + filename + '.png.npy'
+                mask = np.load(mask_path)
+                mask_channel = [mask[i, :, :] for i in range(4)]
+                mask_pil = [Image.fromarray((mask_channel[i] * 255).astype(np.uint8)) for i in range(4)]
+                data = self._transform(imgs=[mask_pil[0], mask_pil[1], mask_pil[2], mask_pil[3], img_png],
+                                       targets=[target_png])
+                transformed_mask = torch.cat([data[0].pop(0) for _ in range(4)])
+                transformed_mask_tf = torch.cat([data[1].pop(0) for _ in range(4)])
+                data = [[torch.cat([transformed_mask, data[0][0]]), data[0][1]],
+                        [torch.cat([transformed_mask_tf, data[1][0]]), data[1][1]]]
+            elif self._tod == 'val':
+                mask_path = self._root_dir + '/val/val_masks_from_teacher/' + filename + '.png.npy'
+                mask = np.load(mask_path)
+                mask_channel = [mask[i, :, :] for i in range(4)]
+
+                mask_pil = [Image.fromarray((mask_channel[i] * 255).astype(np.uint8)) for i in range(4)]
+                data = self._transform(imgs = [mask_pil[0], mask_pil[1], mask_pil[2], mask_pil[3], img_png],
+                                       targets = [target_png])
+                transformed_mask = torch.cat([data.pop(0) for _ in range(4)])
+                data = [torch.cat([transformed_mask, data[0]]), data[1]]
+        else:
+            data = self._transform(imgs=[img_png], targets=[target_png])
         partition = self._get_partition(filename)
         group = self._get_group(filename)
         return data, filename, partition, group
