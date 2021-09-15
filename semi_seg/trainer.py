@@ -1,20 +1,16 @@
 import os
-from copy import deepcopy
-from itertools import chain
-from pathlib import Path
-from typing import Tuple
-
 import torch
+from contrastyou import PROJECT_PATH
 from deepclustering2 import optim
+from deepclustering2.configparser import ConfigManger
 from deepclustering2.meters2 import EpochResultDict, StorageIncomeDict
 from deepclustering2.schedulers import GradualWarmupScheduler
-from deepclustering2.configparser import ConfigManger
 from deepclustering2.trainer import Trainer
 from deepclustering2.type import T_loader, T_loss
+from pathlib import Path
+from semi_seg.epocher import FullEpocher, IterativeEpocher, TrainEpocher, EvalEpocher, InferenceEpocher, FullEvalEpocher
 from torch import nn
-
-from contrastyou import PROJECT_PATH
-from semi_seg.epocher import FullEpocher, FullEpocherExp, IterativeEpocher, TrainEpocher, EvalEpocher, InferenceEpocher
+from typing import Tuple
 
 cmanager = ConfigManger(Path(PROJECT_PATH) / "config/semi.yaml")
 config = cmanager.config
@@ -27,7 +23,8 @@ class SemiTrainer(Trainer):
 
     feature_positions = ["Up_conv4", "Up_conv3"]
 
-    def __init__(self, *, alpha: float = config["Aggregator"]["alpha"], num_iter: int = config["Iterations"]["num_iter"],
+    def __init__(self, *, alpha: float = config["Aggregator"]["alpha"],
+                 num_iter: int = config["Iterations"]["num_iter"],
                  model: nn.Module, labeled_loader: T_loader, unlabeled_loader: T_loader,
                  val_loader: T_loader,
                  sup_criterion: T_loss, save_dir: str = "base",
@@ -37,7 +34,7 @@ class SemiTrainer(Trainer):
         self._labeled_loader = labeled_loader
         self._unlabeled_loader = unlabeled_loader
         self._val_loader = val_loader
-        #self._test_loader = test_loader
+        # self._test_loader = test_loader
         self._sup_criterion = sup_criterion
 
     def init(self):
@@ -88,7 +85,7 @@ class SemiTrainer(Trainer):
         evaler = EvalEpocher(model=self._model, val_loader=loader,
                              sup_criterion=self._sup_criterion,
                              cur_epoch=self._cur_epoch, device=self._device,
-                             num_iter=config["Iterations"]["num_iter"],alpha=config["Aggregator"]["alpha"])
+                             num_iter=config["Iterations"]["num_iter"], alpha=config["Aggregator"]["alpha"])
         result, cur_score = evaler.run()
         return result, cur_score
 
@@ -106,7 +103,7 @@ class SemiTrainer(Trainer):
             # update lr_scheduler
             if hasattr(self, "_scheduler"):
                 self._scheduler.step()
-            storage_per_epoch = StorageIncomeDict(tra=train_result, val=eval_result)#, test=test_result)
+            storage_per_epoch = StorageIncomeDict(tra=train_result, val=eval_result)  # , test=test_result)
             self._storage.put_from_dict(storage_per_epoch, self._cur_epoch)
             self._writer.add_scalar_with_StorageDict(storage_per_epoch, self._cur_epoch)
             # save_checkpoint
@@ -126,8 +123,8 @@ class SemiTrainer(Trainer):
                 assert checkpoint.exists()
                 checkpoint = checkpoint / "best.pth"
             self.load_state_dict_from_path(str(checkpoint), strict=True)
-        evaler = InferenceEpocher(self._model, val_loader=self._val_loader, #test_loader=self._test_loader,
-                                  sup_criterion=self._sup_criterion, id = 1,
+        evaler = InferenceEpocher(self._model, val_loader=self._val_loader,  # test_loader=self._test_loader,
+                                  sup_criterion=self._sup_criterion, id=1,
                                   cur_epoch=self._cur_epoch, device=self._device)
         evaler.set_save_dir(self._save_dir)
         result, cur_score = evaler.run()
@@ -144,8 +141,9 @@ class IterativeTrainer(SemiTrainer):
                  sup_criterion: T_loss, save_dir: str = "base", max_epoch: int = 100,
                  num_batches: int = 100, device: str = "cpu", configuration=None, **kwargs):
         super().__init__(model=model, labeled_loader=labeled_loader, unlabeled_loader=None,
-                         val_loader=val_loader, test_loader=None, sup_criterion=sup_criterion, save_dir=save_dir,
-                         max_epoch=max_epoch, num_batches=len(labeled_loader), device=device, configuration=configuration,
+                         val_loader=val_loader, sup_criterion=sup_criterion, save_dir=save_dir,
+                         max_epoch=max_epoch, num_batches=num_batches, device=device,
+                         configuration=configuration,
                          **kwargs)
         self._alpha = alpha
         self._num_iter = num_iter
@@ -158,22 +156,25 @@ class IterativeTrainer(SemiTrainer):
         self._init_scheduler(self._optimizer)
 
     def _run_epoch(self, *args, **kwargs) -> EpochResultDict:
-        trainer = IterativeEpocher(alpha = self._alpha, num_iter = self._num_iter, model = self._model,
-                                   optimizer = self._optimizer, labeled_loader = self._labeled_loader,
-                                   sup_criterion = self._sup_criterion, device = self._device,
-                                   cur_epoch = self._cur_epoch)
+        trainer = IterativeEpocher(alpha=self._alpha, num_iter=self._num_iter, model=self._model,
+                                   optimizer=self._optimizer, labeled_loader=self._labeled_loader,
+                                   sup_criterion=self._sup_criterion, device=self._device,
+                                   num_batches=self._num_batches,
+                                   cur_epoch=self._cur_epoch)
         result = trainer.run()
         return result
+
 
 class FullTrainer(SemiTrainer):
 
     def __init__(self, *, model: nn.Module, labeled_loader: T_loader,
-                 val_loader: T_loader, test_loader:T_loader,
+                 val_loader: T_loader, test_loader: T_loader,
                  sup_criterion: T_loss, save_dir: str = "base", max_epoch: int = 100,
                  num_batches: int = 100, device: str = "cpu", configuration=None, **kwargs):
         super().__init__(model=model, labeled_loader=labeled_loader, unlabeled_loader=None, test_loader=test_loader,
                          val_loader=val_loader, sup_criterion=sup_criterion, save_dir=save_dir,
-                         max_epoch=max_epoch, num_batches=len(labeled_loader), device=device, configuration=configuration,
+                         max_epoch=max_epoch, num_batches=num_batches, device=device,
+                         configuration=configuration,
                          **kwargs)
 
         self._labeled_loader = labeled_loader
@@ -185,15 +186,22 @@ class FullTrainer(SemiTrainer):
         self._init_scheduler(self._optimizer)
 
     def _run_epoch(self, *args, **kwargs) -> EpochResultDict:
-        trainer = FullEpocher(model = self._model, optimizer = self._optimizer, labeled_loader = self._labeled_loader,
-                              sup_criterion = self._sup_criterion, device = self._device, cur_epoch = self._cur_epoch)
+        trainer = FullEpocher(model=self._model, optimizer=self._optimizer, labeled_loader=self._labeled_loader,
+                              sup_criterion=self._sup_criterion, device=self._device, cur_epoch=self._cur_epoch,
+                              num_batches=self._num_batches)
         result = trainer.run()
         return result
 
-
+    def _eval_epoch(self, *, loader: T_loader, **kwargs) -> Tuple[EpochResultDict, float]:
+        evaler = FullEvalEpocher(model=self._model, val_loader=loader,
+                                 # todo: remove the iterative thing for the Full trainer.
+                                 sup_criterion=self._sup_criterion,
+                                 cur_epoch=self._cur_epoch, device=self._device)
+        result, cur_score = evaler.run()
+        return result, cur_score
 
 
 trainer_zoos = {
     "full": FullTrainer,
-    "iterative":IterativeTrainer
+    "iterative": IterativeTrainer
 }

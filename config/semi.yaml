@@ -6,11 +6,11 @@ Arch:
 
 Optim:
   name: Adam
-  lr: 0.0000001
+  lr: 0.000001
   weight_decay: 0.00001
 
 Iterations:
-  num_iter : 5
+  num_iter : 2
 
 Aggregator:
   alpha : 0.9
@@ -48,42 +48,6 @@ Trainer:
   num_batches: 500
   max_epoch: 100
 
-UDARegCriterion:
-  name: mse # kl
-  weight: 5.0
-
-IICRegParameters:
-  EncoderParams:
-    num_clusters: 20
-    num_subheads: 5
-    head_types: linear
-    normalize: false
-
-  DecoderParams:
-    num_clusters: 20
-    num_subheads: 5
-    head_types: linear
-    normalize: false
-
-  LossParams:
-    paddings: [1, 3]
-    patch_sizes: 1024
-
-  weight: 0.1
-
-EntropyMinParameters:
-  weight: 0.00001
-
-MeanTeacherParameters:
-  name: mse
-  weight: 10
-  alpha: 0.999
-  weight_decay: 0.000001
-
-MIDLPaperParameters:
-  iic_weight: 0.1
-  padding: 1
-  patch_size: 1024
 
 
 

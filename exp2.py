@@ -1,8 +1,8 @@
-
+from deepclustering2.dataloader.sampler import InfiniteRandomSampler
 from scipy.sparse import issparse  # noqa
-from math import ceil
-_ = issparse  # noqa
 
+_ = issparse  # noqa
+import warnings
 from deepclustering2.loss import KL_div
 
 from pathlib import Path
@@ -21,6 +21,8 @@ from semi_seg.augment import ACDCStrongTransforms
 import os
 from torch.utils.data import DataLoader
 
+warnings.simplefilter("ignore")
+
 # load configure from yaml and argparser
 cmanager = ConfigManger(Path(PROJECT_PATH) / "config/semi.yaml")
 config = cmanager.config
@@ -29,28 +31,31 @@ cur_githash = gethash(__file__)
 tra_transforms = ACDCStrongTransforms.pretrain
 val_transforms = ACDCStrongTransforms.val
 
-val_dataset = ACDCDataset(exp = True, tod='val', root_dir=DATA_PATH, mode="val", transforms=val_transforms, verbose=True)
-train_dataset = ACDCDataset(exp = True, tod='train', root_dir=DATA_PATH, mode="train", transforms=tra_transforms, verbose=True)
+val_dataset = ACDCDataset(exp=True, tod='val', root_dir=DATA_PATH, mode="val", transforms=val_transforms, verbose=True)
+train_dataset = ACDCDataset(exp=True, tod='train', root_dir=DATA_PATH, mode="train", transforms=tra_transforms,
+                            verbose=True)
 ls = {'img': [], 'gt': []}
-files_to_match = os.listdir('/home/saksham/Iterative-learning/.data/ACDC_contrast/train/train_masks_from_teacher/preds')
+files_to_match = os.listdir(
+    '/home/jizong/UserSpace/Iterative-learning/.data/ACDC_contrast/train/train_masks_from_teacher/preds')
 for i in range(len(train_dataset._filenames['img'])):
     if train_dataset._filenames['img'][i].split('/')[-1] + '.npy' in files_to_match:
         ls['img'].append(train_dataset._filenames['img'][i])
         ls['gt'].append(train_dataset._filenames['gt'][i])
+
 train_dataset._filenames['img'] = ls['img']
 train_dataset._filenames['gt'] = ls['gt']
 
+sampler = InfiniteRandomSampler(train_dataset, shuffle=True)
 
 train_loader = DataLoader(train_dataset,
-                          batch_size = config["LabeledData"]["batch_size"],
-                          num_workers = config["LabeledData"]["num_workers"],
-                          shuffle = True, pin_memory=True)
+                          batch_size=config["LabeledData"]["batch_size"],
+                          num_workers=config["LabeledData"]["num_workers"],
+                          sampler=sampler, pin_memory=True)
 
 val_loader = DataLoader(val_dataset,
-                        batch_size = config["ValidationData"]["batch_size"],
-                        num_workers = config["ValidationData"]["num_workers"],
+                        batch_size=config["ValidationData"]["batch_size"],
+                        num_workers=config["ValidationData"]["num_workers"],
                         pin_memory=True)
-
 
 # set reproducibility
 set_benchmark(config.get("RandomSeed", 1))
@@ -58,16 +63,14 @@ trainer_name = config["Trainer"].pop("name")
 Trainer = trainer_zoos[trainer_name]
 model = UNet(**config["Arch"])
 trainer = Trainer(
-            model=model, labeled_loader=train_loader,
-            val_loader=val_loader, sup_criterion=KL_div(),
-            num_iter=config["Iterations"]['num_iter'], alpha=config["Aggregator"]["alpha"],
-            configuration={**cmanager.config, **{"GITHASH": cur_githash}}, **config["Trainer"])
+    model=model, labeled_loader=train_loader,
+    val_loader=val_loader, sup_criterion=KL_div(), test_loader=None,
+    num_iter=config["Iterations"]['num_iter'], alpha=config["Aggregator"]["alpha"],
+    configuration={**cmanager.config, **{"GITHASH": cur_githash}}, **config["Trainer"])
 
 trainer.init()
 checkpoint = config.get("Checkpoint", None)
 if checkpoint is not None:
     trainer.load_state_dict_from_path(checkpoint, strict=False)
 trainer.start_training()
-#trainer.inference(checkpoint=checkpoint)
-
-
+# trainer.inference(checkpoint=checkpoint)
