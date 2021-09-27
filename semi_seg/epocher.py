@@ -441,7 +441,7 @@ class InverseIterativeEpocher(_num_class_mixin, _Epocher):
 
                 cur_predict = self._model(concat).softmax(1)
                 for i in range(labeled_image.shape[0]):
-                    self._mem_bank[labeled_filename[i]] = cur_predict[i]
+                    self._mem_bank[labeled_filename[i]] = cur_predict[i].detach()
 
                 if ITER == 0:
                     aggregated_simplex = cur_predict
