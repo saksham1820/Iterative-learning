@@ -8,7 +8,8 @@ from deepclustering2.schedulers import GradualWarmupScheduler
 from deepclustering2.trainer import Trainer
 from deepclustering2.type import T_loader, T_loss
 from pathlib import Path
-from semi_seg.epocher import FullEpocher, IterativeEpocher, TrainEpocher, EvalEpocher, InferenceEpocher, FullEvalEpocher
+from semi_seg.epocher import FullEpocher, IterativeEpocher, TrainEpocher, EvalEpocher, InferenceEpocher, FullEvalEpocher,\
+    InverseIterativeEpocher
 from torch import nn
 from typing import Tuple
 
@@ -200,8 +201,47 @@ class FullTrainer(SemiTrainer):
         result, cur_score = evaler.run()
         return result, cur_score
 
+class InverseIterativeTrainer(SemiTrainer):
+
+    def __init__(self, *, memory_bank, alpha: float, num_iter: int, model: nn.Module, labeled_loader: T_loader, val_loader: T_loader,
+                 sup_criterion: T_loss, save_dir: str = "base", max_epoch: int = 100,
+                 num_batches: int = 100, device: str = "cpu", configuration=None, **kwargs):
+        super().__init__(model=model, labeled_loader=labeled_loader, unlabeled_loader=None,
+                         val_loader=val_loader, sup_criterion=sup_criterion, save_dir=save_dir,
+                         max_epoch=max_epoch, num_batches=num_batches, device=device,
+                         configuration=configuration,
+                         **kwargs)
+        self._alpha = alpha
+        self._memory_bank = memory_bank
+        self._num_iter = num_iter
+        self._labeled_loader = labeled_loader
+        self._val_loader = val_loader
+        self._sup_criterion = sup_criterion
+
+    def init(self):
+        self._init_optimizer()
+        self._init_scheduler(self._optimizer)
+
+    def _run_epoch(self, *args, **kwargs) -> EpochResultDict:
+        trainer = InverseIterativeEpocher(memory_bank = self._memory_bank,alpha=self._alpha,
+                                          num_iter=self._num_iter, model=self._model,
+                                          optimizer=self._optimizer, labeled_loader=self._labeled_loader,
+                                          sup_criterion=self._sup_criterion, device=self._device,
+                                          num_batches=self._num_batches,
+                                          cur_epoch=self._cur_epoch)
+        result = trainer.run()
+        return result
+
+    def _eval_epoch(self, *, loader: T_loader, **kwargs) -> Tuple[EpochResultDict, float]:
+        evaler = InverseIterativeEvalEpocher(model=self._model, val_loader=loader,
+                             sup_criterion=self._sup_criterion,
+                             cur_epoch=self._cur_epoch, device=self._device,
+                             num_iter=config["Iterations"]["num_iter"], alpha=config["Aggregator"]["alpha"])
+        result, cur_score = evaler.run()
+        return result, cur_score
 
 trainer_zoos = {
     "full": FullTrainer,
-    "iterative": IterativeTrainer
+    "iterative": IterativeTrainer,
+    "inv_iterative": InverseIterativeTrainer
 }
