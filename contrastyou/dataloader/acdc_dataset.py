@@ -96,6 +96,8 @@ class ACDCDataset(ContrastDataset, _ACDCDataset):
         group = self._get_group(filename)
         return data, filename, partition, group
 
+
+
     def _get_group(self, filename) -> Union[str, int]:
         return str(self._get_group_name(filename))
 
