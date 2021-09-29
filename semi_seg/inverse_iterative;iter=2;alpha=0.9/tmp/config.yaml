@@ -1,0 +1,46 @@
+Aggregator:
+  alpha: 0.9
+Arch:
+  input_dim: 5
+  num_classes: 4
+Data:
+  labeled_data_ratio: 1
+  name: acdc
+  unlabeled_data_ratio: 0.0
+GITHASH: 7583e246872e8beb735e2a1fc820132949bb5968
+Iterations:
+  num_iter: 2
+LabeledData:
+  batch_size: 5
+  num_workers: 5
+  shuffle: true
+Optim:
+  lr: 5.0e-07
+  name: Adam
+  weight_decay: 1.0e-05
+RandomSeed: 10
+Scheduler:
+  multiplier: 400
+  warmup_max: 10
+Trainer:
+  device: cuda
+  feature_importance:
+  - 1
+  - 0.5
+  - 0.5
+  feature_names:
+  - Conv5
+  - Up_conv3
+  - Up_conv2
+  max_epoch: 50
+  name: inv_iterative
+  num_batches: 65
+  save_dir: tmp
+UnlabeledData:
+  batch_size: 10
+  num_workers: 4
+  shuffle: true
+ValidationData:
+  batch_size: 5
+  num_workers: 1
+  shuffle: true
