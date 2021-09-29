@@ -8,8 +8,8 @@ from deepclustering2.schedulers import GradualWarmupScheduler
 from deepclustering2.trainer import Trainer
 from deepclustering2.type import T_loader, T_loss
 from pathlib import Path
-from semi_seg.epocher import FullEpocher, IterativeEpocher, TrainEpocher, EvalEpocher, InferenceEpocher, FullEvalEpocher,\
-    InverseIterativeEpocher
+from semi_seg.epocher import FullEpocher, IterativeEpocher, IterativeEvalEpocher, TrainEpocher, \
+    InferenceEpocher, FullEvalEpocher, InverseIterativeEpocher, InverseIterativeEvalEpocher
 from torch import nn
 from typing import Tuple
 
@@ -37,6 +37,7 @@ class SemiTrainer(Trainer):
         self._val_loader = val_loader
         # self._test_loader = test_loader
         self._sup_criterion = sup_criterion
+
 
     def init(self):
         self._init()
@@ -83,7 +84,13 @@ class SemiTrainer(Trainer):
         return result
 
     def _eval_epoch(self, *, loader: T_loader, **kwargs) -> Tuple[EpochResultDict, float]:
-        evaler = EvalEpocher(model=self._model, val_loader=loader,
+        mem_bank = {}
+        temp = list(loader)
+        for i in range(len(temp)):
+            for file in temp[i][1]:
+                temp_dic[file] = None
+
+        evaler = InverseIterativeEvalEpocher(model=self._model, val_loader=loader, memory_bank = mem_bank,
                              sup_criterion=self._sup_criterion,
                              cur_epoch=self._cur_epoch, device=self._device,
                              num_iter=config["Iterations"]["num_iter"], alpha=config["Aggregator"]["alpha"])
@@ -165,6 +172,13 @@ class IterativeTrainer(SemiTrainer):
         result = trainer.run()
         return result
 
+    def _eval_epoch(self, *, loader: T_loader, **kwargs) -> Tuple[EpochResultDict, float]:
+        evaler = IterativeEvalEpocher(model=self._model, val_loader=loader,
+                             sup_criterion=self._sup_criterion,
+                             cur_epoch=self._cur_epoch, device=self._device,
+                             num_iter=config["Iterations"]["num_iter"], alpha=config["Aggregator"]["alpha"])
+        result, cur_score = evaler.run()
+        return result, cur_score
 
 class FullTrainer(SemiTrainer):
 
@@ -233,8 +247,13 @@ class InverseIterativeTrainer(SemiTrainer):
         return result
 
     def _eval_epoch(self, *, loader: T_loader, **kwargs) -> Tuple[EpochResultDict, float]:
+        mem_bank = {}
+        temp = list(loader)
+        for i in range(len(temp)):
+            for file in temp[i][1]:
+                mem_bank[file] = None
         evaler = InverseIterativeEvalEpocher(model=self._model, val_loader=loader,
-                             sup_criterion=self._sup_criterion,
+                             sup_criterion=self._sup_criterion, memory_bank=mem_bank,
                              cur_epoch=self._cur_epoch, device=self._device,
                              num_iter=config["Iterations"]["num_iter"], alpha=config["Aggregator"]["alpha"])
         result, cur_score = evaler.run()

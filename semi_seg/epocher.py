@@ -42,7 +42,7 @@ class _num_class_mixin:
         return self._model.num_classes
 
 
-class EvalEpocher(_num_class_mixin, _Epocher):
+class IterativeEvalEpocher(_num_class_mixin, _Epocher):
 
     def __init__(self, alpha: float, num_iter: int, model: Union[Model, nn.Module], val_loader: T_loader,
                  sup_criterion: T_loss, cur_epoch=0, device="cpu") -> None:
@@ -63,7 +63,7 @@ class EvalEpocher(_num_class_mixin, _Epocher):
         assert num_iters >= 1
         for i in range(num_iters):
             meters.register_meter(f"itrdice_{i}", UniversalDice(C, report_axises=report_axis, ))
-            # todo: peform the same as the train.
+            meters.register_meter(f"itrloss_{i}", AverageValueMeter())
         return meters
 
     @torch.no_grad()
@@ -80,7 +80,7 @@ class EvalEpocher(_num_class_mixin, _Epocher):
             # uniform_dis = torch.ones(val_img_dims[0], self._model.num_classes, *val_img_dims[2:],
             #                         device=self.device).softmax(1)
             aggregated_simplex = None
-            iter_loss = 0
+            loss_list = []
             onehot_target = class2one_hot(val_target.squeeze(1), self.num_classes)
             for ITER in range(self._num_iter):
                 # concat = torch.cat([aggregated_simplex, uniform_dis], dim=1)
@@ -91,8 +91,7 @@ class EvalEpocher(_num_class_mixin, _Epocher):
                     concat = torch.cat([val_img[:, -1, :, :].reshape(val_img_dims[0], 1, 224, 224),
                                         aggregated_simplex], dim=1)
                 cur_predict = self._model(concat).softmax(1)
-                with torch.no_grad():  # todo:  changer the evaler like the iterative epocher
-                    self.meters[f"itrdice_{ITER}"].add(cur_predict.max(1)[1], val_target.squeeze())
+
                 if ITER == 0:
                     aggregated_simplex = cur_predict
                     save_dir = save_dir_base + str(self._cur_epoch) + '/iter0/'
@@ -102,10 +101,19 @@ class EvalEpocher(_num_class_mixin, _Epocher):
                     save_dir = save_dir_base + str(self._cur_epoch) + '/iter1/'
                     # write_predict(cur_predict, save_dir, file_path)
 
-                iter_loss = iter_loss + self._sup_criterion(aggregated_simplex.softmax(1), onehot_target,
+                iter_loss = self._sup_criterion(aggregated_simplex, onehot_target,
                                                             disable_assert=True)
 
-            self.meters["loss"].add(iter_loss.item())
+                with torch.no_grad():  # todo:  changer the evaler like the iterative epocher
+                    self.meters[f"itrdice_{ITER}"].add(cur_predict.max(1)[1], val_target.squeeze())
+                    self.meters[f"itrloss_{ITER}"].add(iter_loss.item())
+                loss_list.append(iter_loss)
+
+            if len(loss_list) == 0:
+                raise RuntimeError("no loss there.")
+            total_loss = sum(loss_list)
+
+            self.meters["loss"].add(total_loss.item())
             self.meters["dice"].add(aggregated_simplex.max(1)[1], val_target.squeeze(1), group_name=group)
             report_dict = self.meters.tracking_status()
             self._indicator.set_postfix_dict(report_dict)
@@ -168,7 +176,7 @@ class FullEvalEpocher(_num_class_mixin, _Epocher):
         return image, target, filename, partition, group
 
 
-class InferenceEpocher(EvalEpocher):
+class InferenceEpocher(IterativeEvalEpocher):
 
     def set_save_dir(self, save_dir):
         self._save_dir = save_dir
@@ -381,10 +389,86 @@ class IterativeEpocher(_num_class_mixin, _Epocher):
 
     @staticmethod
     def _unzip_data(data, device):
-        (image, target), _, filename, partition, group = \
-            preprocess_input_with_twice_transformation(data, device)
+        image, target, filename, partition, group = \
+            preprocess_input_with_single_transformation(data, device)
         return image, target, filename, partition, group
 
+class InverseIterativeEvalEpocher(_num_class_mixin, _Epocher):
+
+    def __init__(self, memory_bank, alpha: float, num_iter: int, model: Union[Model, nn.Module], val_loader: T_loader,
+                 sup_criterion: T_loss, cur_epoch=0, device="cpu") -> None:
+        assert isinstance(val_loader, DataLoader), \
+            f"val_loader should be an instance of DataLoader, given {val_loader.__class__.__name__}."
+        super().__init__(model, num_batches=len(val_loader), cur_epoch=cur_epoch, device=device)
+        self._alpha = alpha
+        self._mem_bank = memory_bank
+        self._num_iter = num_iter
+        self._val_loader = val_loader
+        self._sup_criterion = sup_criterion
+
+    def _configure_meters(self, meters: MeterInterface) -> MeterInterface:
+        C = self.num_classes
+        report_axis = list(range(1, C))
+        num_iters = self._num_iter
+        assert num_iters >= 1
+        for i in range(num_iters):
+            meters.register_meter(f"itrdice_{i}", UniversalDice(C, report_axises=report_axis, ))
+            meters.register_meter(f"itrloss_{i}", AverageValueMeter())
+        return meters
+
+    @torch.no_grad()
+    def _run(self, *args, **kwargs) -> Tuple[EpochResultDict, float]:
+        self._model.train()
+        report_dict = EpochResultDict()
+        save_dir_base = '/home/saksham/Iterative-learning/.data/ACDC_contrast/evolution_val/'
+
+        for ITER in range(self._num_iter):
+            for i, val_data in zip(self._indicator, self._val_loader):
+                val_img, val_target, file_path, _, group = self._unzip_data(val_data, self._device)
+                val_img_dims = val_img.shape
+                # write_img_target(val_img[:,-1,:,:].reshape(val_img_dims[0], 1, 224, 224), val_target, save_dir_base, file_path)
+                alpha = self._alpha
+                onehot_target = class2one_hot(val_target.squeeze(1), self.num_classes)
+
+                # concat = torch.cat([aggregated_simplex, uniform_dis], dim=1)
+                # concat = torch.cat([val_img, aggregated_simplex], dim=1)
+                if ITER == 0:
+                    concat = val_img
+                else:
+                    cur_batch_prev_pred = []
+                    for file in file_path:
+                        cur_batch_prev_pred.append(self._mem_bank[file])
+                    cur_batch_stack = torch.stack(cur_batch_prev_pred)
+                    concat = torch.cat([cur_batch_stack,
+                                        val_img[:, -1, :, :].reshape(val_img_dims[0], 1, 224, 224)], dim=1)
+                    assert None not in (concat.cpu().__array__())
+                cur_predict = self._model(concat).softmax(1)
+
+                if ITER == 0:
+                    aggregated_simplex = cur_predict
+                    save_dir = save_dir_base + str(self._cur_epoch) + '/iter0/'
+                    # write_predict(cur_predict, save_dir, file_path)
+                else:
+                    aggregated_simplex = alpha * cur_batch_stack.detach() + (1 - alpha) * cur_predict
+                    save_dir = save_dir_base + str(self._cur_epoch) + '/iter1/'
+                    # write_predict(cur_predict, save_dir, file_path)
+                for j in range(val_img.shape[0]):
+                    self._mem_bank[file_path[j]] = aggregated_simplex[j].detach()
+
+                iter_loss = self._sup_criterion(aggregated_simplex, onehot_target,
+                                                            disable_assert=True)
+
+            self.meters[f"itrloss_{ITER}"].add(iter_loss.item())
+            self.meters[f"itrdice_{ITER}"].add(aggregated_simplex.max(1)[1], val_target.squeeze(),
+                                               group_name=group)
+            report_dict = self.meters.tracking_status()
+            self._indicator.set_postfix_dict(report_dict)
+        return report_dict, self.meters[f"itrdice_{ITER}"].summary()["DSC_mean"]
+
+    @staticmethod
+    def _unzip_data(data, device):
+        image, target, filename, partition, group = preprocess_input_with_single_transformation(data, device)
+        return image, target, filename, partition, group
 
 class InverseIterativeEpocher(_num_class_mixin, _Epocher):
 
@@ -404,8 +488,8 @@ class InverseIterativeEpocher(_num_class_mixin, _Epocher):
         C = self.num_classes
         report_axis = list(range(1, C))
         meters.register_meter("lr", AverageValueMeter())
-        meters.register_meter("sup_loss", AverageValueMeter())
-        meters.register_meter("sup_dice", UniversalDice(C, report_axises=report_axis, ))
+        #meters.register_meter("sup_loss", AverageValueMeter())
+        #meters.register_meter("sup_dice", UniversalDice(C, report_axises=report_axis, ))
         num_iters = self._num_iter
         assert num_iters >= 1
         for i in range(num_iters):
@@ -436,45 +520,43 @@ class InverseIterativeEpocher(_num_class_mixin, _Epocher):
                     for file in labeled_filename:
                         cur_batch_prev_pred.append(self._mem_bank[file])
                     cur_batch_stack = torch.stack(cur_batch_prev_pred)
-                    concat = torch.cat([labeled_image[:, -1, :, :].reshape(labeled_image_dims[0], 1, 224, 224),
-                                        cur_batch_stack], dim=1)
+
+                    concat = torch.cat([cur_batch_stack,
+                                        labeled_image[:, -1, :, :].reshape(labeled_image_dims[0], 1, 224, 224)], dim=1)
 
                 cur_predict = self._model(concat).softmax(1)
-                for i in range(labeled_image.shape[0]):
-                    self._mem_bank[labeled_filename[i]] = cur_predict[i].detach()
 
                 if ITER == 0:
                     aggregated_simplex = cur_predict
                 else:
-                    aggregated_simplex = alpha * cur_batch_stack.clone().detach() + (
+                    aggregated_simplex = alpha * cur_batch_stack.detach() + (
                         1 - alpha) * cur_predict  # todo: try to play with this
-                cur_loss = self._sup_criterion(aggregated_simplex, onehot_target)
+                for j in range(labeled_image.shape[0]):
+                    self._mem_bank[labeled_filename[j]] = aggregated_simplex[j].detach()
 
-
-                with torch.no_grad():
-                    self.meters[f"itrdice_{ITER}"].add(cur_predict.max(1)[1], labeled_target.squeeze(),
-                                                       group_name = label_group)
-                    self.meters[f"itrloss_{ITER}"].add(cur_loss.item())
+                cur_loss = self._sup_criterion(aggregated_simplex, onehot_target,
+                                               disable_assert = True)
 
             # supervised part
 
             # gradient backpropagation
                 total_loss = cur_loss
                 self._optimizer.zero_grad()
-                total_loss.backward(retain_graph = True)
+                cur_loss.backward(retain_graph = True)
                 self._optimizer.step()
                 # recording can be here or in the regularization method
                 with torch.no_grad():
-                    self.meters["sup_loss"].add(total_loss.item())
-                    self.meters["sup_dice"].add(aggregated_simplex.max(1)[1], labeled_target.squeeze())
+                    self.meters[f"itrloss_{ITER}"].add(total_loss.item())
+                    self.meters[f"itrdice_{ITER}"].add(aggregated_simplex.max(1)[1], labeled_target.squeeze(),
+                                                        group_name = label_group)
                     report_dict = self.meters.tracking_status()
                     self._indicator.set_postfix_dict(report_dict)
         return report_dict
 
     @staticmethod
     def _unzip_data(data, device):
-        (image, target), _, filename, partition, group = \
-            preprocess_input_with_twice_transformation(data, device)
+        image, target, filename, partition, group = \
+            preprocess_input_with_single_transformation(data, device)
         return image, target, filename, partition, group
 
 

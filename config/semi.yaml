@@ -1,12 +1,12 @@
 RandomSeed: 10
 
 Arch:
-  input_dim: 1
+  input_dim: 5
   num_classes: 4
 
 Optim:
   name: Adam
-  lr: 0.000001
+  lr: 0.0000005
   weight_decay: 0.00001
 
 Iterations:
@@ -42,11 +42,11 @@ UnlabeledData:
 Trainer:
   feature_names: ["Conv5", "Up_conv3", "Up_conv2"]
   feature_importance: [1, 0.5, 0.5]
-  name: full
+  name: inv_iterative
   save_dir: tmp
   device: cuda
-  num_batches: 500
-  max_epoch: 100
+  num_batches: 65
+  max_epoch: 50
 
 
 

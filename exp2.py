@@ -32,7 +32,7 @@ tra_transforms = ACDCStrongTransforms.pretrain
 val_transforms = ACDCStrongTransforms.val
 
 val_dataset = ACDCDataset(exp=True, tod='val', root_dir=DATA_PATH, mode="val", transforms=val_transforms, verbose=True)
-train_dataset = ACDCDataset(exp=True, tod='train', root_dir=DATA_PATH, mode="train", transforms=tra_transforms,
+train_dataset = ACDCDataset(exp=True, tod='train', root_dir=DATA_PATH, mode="train", transforms=val_transforms,
                             verbose=True)
 ls = {'img': [], 'gt': []}
 files_to_match = os.listdir(
@@ -50,16 +50,16 @@ sampler = InfiniteRandomSampler(train_dataset, shuffle=True)
 train_loader = DataLoader(train_dataset,
                           batch_size=config["LabeledData"]["batch_size"],
                           num_workers=config["LabeledData"]["num_workers"],
-                          sampler=sampler, pin_memory=True)
+                          sampler=sampler, pin_memory=False)
 
 val_loader = DataLoader(val_dataset,
                         batch_size=config["ValidationData"]["batch_size"],
                         num_workers=config["ValidationData"]["num_workers"],
-                        pin_memory=True)
+                        pin_memory=False)
 mem_bank = {}
-
 for i in range(len(train_dataset)):
     mem_bank[train_dataset[i][-3]] = None
+
 
 # set reproducibility
 set_benchmark(config.get("RandomSeed", 1))
