@@ -57,7 +57,7 @@ class ACDCDataset(ContrastDataset, _ACDCDataset):
         filename = Path(filename_list[0]).stem
         #add the block here
         if self._exp:
-
+            #
             # if self._tod == 'train':
             #     mask_path = self._root_dir + '/train/train_masks_from_teacher/preds/' + filename + '.png.npy'
             #     mask = np.load(mask_path)
@@ -69,8 +69,6 @@ class ACDCDataset(ContrastDataset, _ACDCDataset):
             #     transformed_mask_tf = torch.cat([data[1].pop(0) for _ in range(4)])
             #     data = [[torch.cat([transformed_mask, data[0][0]]), data[0][1]],
             #             [torch.cat([transformed_mask_tf, data[1][0]]), data[1][1]]]
-            #     transformed_mask = torch.cat([data.pop(0) for _ in range(4)])
-
             if self._tod == 'train':
                 mask_path = self._root_dir + '/train/train_masks_from_teacher/preds/' + filename + '.png.npy'
                 mask = np.load(mask_path)
@@ -79,6 +77,7 @@ class ACDCDataset(ContrastDataset, _ACDCDataset):
                 mask_pil = [Image.fromarray((mask_channel[i] * 255).astype(np.uint8)) for i in range(4)]
                 data = self._transform(imgs = [mask_pil[0], mask_pil[1], mask_pil[2], mask_pil[3], img_png],
                                        targets = [target_png])
+                transformed_mask = torch.cat([data.pop(0) for _ in range(4)])
                 data = [torch.cat([transformed_mask, data[0]]), data[1]]
 
             elif self._tod == 'val':
