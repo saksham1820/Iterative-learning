@@ -19,6 +19,14 @@ config = cmanager.config
 __all__ = ["trainer_zoos"]
 
 
+class TensorAugmentMixin:
+
+    def __init__(self, *, tra_augment, val_augment, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._tra_tensor_augment = tra_augment
+        self._val_tensor_augment = val_augment
+
+
 class SemiTrainer(Trainer):
     RUN_PATH = str(Path(PROJECT_PATH) / "semi_seg" / "runs")  # noqa
 
@@ -37,7 +45,6 @@ class SemiTrainer(Trainer):
         self._val_loader = val_loader
         # self._test_loader = test_loader
         self._sup_criterion = sup_criterion
-
 
     def init(self):
         self._init()
@@ -90,10 +97,11 @@ class SemiTrainer(Trainer):
             for file in temp[i][1]:
                 temp_dic[file] = None
 
-        evaler = InverseIterativeEvalEpocher(model=self._model, val_loader=loader, memory_bank = mem_bank,
-                             sup_criterion=self._sup_criterion,
-                             cur_epoch=self._cur_epoch, device=self._device,
-                             num_iter=config["Iterations"]["num_iter"], alpha=config["Aggregator"]["alpha"])
+        evaler = InverseIterativeEvalEpocher(model=self._model, val_loader=loader, memory_bank=mem_bank,
+                                             sup_criterion=self._sup_criterion,
+                                             cur_epoch=self._cur_epoch, device=self._device,
+                                             num_iter=config["Iterations"]["num_iter"],
+                                             alpha=config["Aggregator"]["alpha"])
         result, cur_score = evaler.run()
         return result, cur_score
 
@@ -143,7 +151,7 @@ class SemiTrainer(Trainer):
         cls.feature_positions = feature_positions
 
 
-class IterativeTrainer(SemiTrainer):
+class IterativeTrainer(TensorAugmentMixin, SemiTrainer):
 
     def __init__(self, *, alpha: float, num_iter: int, model: nn.Module, labeled_loader: T_loader, val_loader: T_loader,
                  sup_criterion: T_loss, save_dir: str = "base", max_epoch: int = 100,
@@ -168,24 +176,26 @@ class IterativeTrainer(SemiTrainer):
                                    optimizer=self._optimizer, labeled_loader=self._labeled_loader,
                                    sup_criterion=self._sup_criterion, device=self._device,
                                    num_batches=self._num_batches,
-                                   cur_epoch=self._cur_epoch)
+                                   cur_epoch=self._cur_epoch, augment=self._tra_tensor_augment)
         result = trainer.run()
         return result
 
     def _eval_epoch(self, *, loader: T_loader, **kwargs) -> Tuple[EpochResultDict, float]:
         evaler = IterativeEvalEpocher(model=self._model, val_loader=loader,
-                             sup_criterion=self._sup_criterion,
-                             cur_epoch=self._cur_epoch, device=self._device,
-                             num_iter=config["Iterations"]["num_iter"], alpha=config["Aggregator"]["alpha"])
+                                      sup_criterion=self._sup_criterion,
+                                      cur_epoch=self._cur_epoch, device=self._device,
+                                      num_iter=config["Iterations"]["num_iter"], alpha=config["Aggregator"]["alpha"])
         result, cur_score = evaler.run()
         return result, cur_score
 
-class FullTrainer(SemiTrainer):
+
+class FullTrainer(TensorAugmentMixin, SemiTrainer):
 
     def __init__(self, *, model: nn.Module, labeled_loader: T_loader,
                  val_loader: T_loader, test_loader: T_loader,
                  sup_criterion: T_loss, save_dir: str = "base", max_epoch: int = 100,
-                 num_batches: int = 100, device: str = "cpu", configuration=None, **kwargs):
+                 num_batches: int = 100, device: str = "cpu", configuration=None,
+                 **kwargs):
         super().__init__(model=model, labeled_loader=labeled_loader, unlabeled_loader=None, test_loader=test_loader,
                          val_loader=val_loader, sup_criterion=sup_criterion, save_dir=save_dir,
                          max_epoch=max_epoch, num_batches=num_batches, device=device,
@@ -215,9 +225,11 @@ class FullTrainer(SemiTrainer):
         result, cur_score = evaler.run()
         return result, cur_score
 
-class InverseIterativeTrainer(SemiTrainer):
 
-    def __init__(self, *, memory_bank, alpha: float, num_iter: int, model: nn.Module, labeled_loader: T_loader, val_loader: T_loader,
+class InverseIterativeTrainer(TensorAugmentMixin, SemiTrainer):
+
+    def __init__(self, *, memory_bank, alpha: float, num_iter: int, model: nn.Module, labeled_loader: T_loader,
+                 val_loader: T_loader,
                  sup_criterion: T_loss, save_dir: str = "base", max_epoch: int = 100,
                  num_batches: int = 100, device: str = "cpu", configuration=None, **kwargs):
         super().__init__(model=model, labeled_loader=labeled_loader, unlabeled_loader=None,
@@ -237,12 +249,13 @@ class InverseIterativeTrainer(SemiTrainer):
         self._init_scheduler(self._optimizer)
 
     def _run_epoch(self, *args, **kwargs) -> EpochResultDict:
-        trainer = InverseIterativeEpocher(memory_bank = self._memory_bank,alpha=self._alpha,
+        trainer = InverseIterativeEpocher(memory_bank=self._memory_bank, alpha=self._alpha,
                                           num_iter=self._num_iter, model=self._model,
                                           optimizer=self._optimizer, labeled_loader=self._labeled_loader,
                                           sup_criterion=self._sup_criterion, device=self._device,
                                           num_batches=self._num_batches,
-                                          cur_epoch=self._cur_epoch)
+                                          cur_epoch=self._cur_epoch,
+                                          augment=self._tra_tensor_augment)
         result = trainer.run()
         return result
 
@@ -253,11 +266,13 @@ class InverseIterativeTrainer(SemiTrainer):
             for file in temp[i][1]:
                 mem_bank[file] = None
         evaler = InverseIterativeEvalEpocher(model=self._model, val_loader=loader,
-                             sup_criterion=self._sup_criterion, memory_bank=mem_bank,
-                             cur_epoch=self._cur_epoch, device=self._device,
-                             num_iter=config["Iterations"]["num_iter"], alpha=config["Aggregator"]["alpha"])
+                                             sup_criterion=self._sup_criterion, memory_bank=mem_bank,
+                                             cur_epoch=self._cur_epoch, device=self._device,
+                                             num_iter=config["Iterations"]["num_iter"],
+                                             alpha=config["Aggregator"]["alpha"])
         result, cur_score = evaler.run()
         return result, cur_score
+
 
 trainer_zoos = {
     "full": FullTrainer,

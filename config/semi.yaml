@@ -10,10 +10,10 @@ Optim:
   weight_decay: 0.00001
 
 Iterations:
-  num_iter : 2
+  num_iter: 2
 
 Aggregator:
-  alpha : 0.9
+  alpha: 0.9
 
 Scheduler:
   multiplier: 400
@@ -40,12 +40,10 @@ UnlabeledData:
   num_workers: 4
 
 Trainer:
-  feature_names: ["Conv5", "Up_conv3", "Up_conv2"]
-  feature_importance: [1, 0.5, 0.5]
   name: inv_iterative
   save_dir: tmp
   device: cuda
-  num_batches: 65
+  num_batches: 500
   max_epoch: 50
 
 

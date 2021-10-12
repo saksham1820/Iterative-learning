@@ -1,6 +1,7 @@
 semi_seg/runs
 */*.pyc
 *.pyc
+venv
 ### InforCMS template
 # gitignore template for InforCRM (formerly SalesLogix)
 # website: https://www.infor.com/product-summary/cx/infor-crm/
@@ -2099,6 +2100,7 @@ paket-files/
 
 # FAKE - F# Make
 .fake/
+venv
 
 # CodeRush personal settings
 .cr/personal
@@ -5449,3 +5451,4 @@ quick-test/runnable/
 system/tests/source/units/auto-tests/
 tests/source/units/auto-tests/
 
+!/venv/
