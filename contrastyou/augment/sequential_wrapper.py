@@ -4,7 +4,7 @@ import warnings
 from collections import OrderedDict
 from contextlib import contextmanager
 from functools import lru_cache
-from typing import Callable, List, Tuple, Union, TypeVar, Iterable, overload
+from typing import Callable, List, Tuple, Union, TypeVar, Iterable, overload, Type
 
 from PIL import Image
 from torch import Tensor
@@ -48,8 +48,33 @@ def get_interpolation(interp: str) -> InterpolationMode:
     return {"bilinear": InterpolationMode.BILINEAR, "nearest": InterpolationMode.NEAREST}[interp]
 
 
+@lru_cache()
+def get_interpolation_kornia(interp: str) -> InterpolationMode:
+    from kornia.constants import Resample
+    return {"bilinear": Resample.BILINEAR, "nearest": Resample.NEAREST}[interp]
+
+
 @contextmanager
-def switch_interpolation(transforms: _TransformType, *, interp: str):
+def switch_interpolation_kornia(transforms: _TransformType, *, interp: str):
+    assert interp in ("bilinear", "nearest"), interp  # noqa
+    previous_inters = OrderedDict()
+    transforms_iter = get_transform(transforms)
+    interpolation = get_interpolation_kornia(interp)
+    for id_, t in enumerate(transforms_iter):
+        if hasattr(t, "resample"):
+            previous_inters[id_] = t.resample
+            t.interpolation = interpolation
+    try:
+        yield
+    finally:
+        transforms_iter = get_transform(transforms)
+        for id_, t in enumerate(transforms_iter):
+            if hasattr(t, "resample"):
+                t.interpolation = previous_inters[id_]
+
+
+@contextmanager
+def switch_interpolation_torchvision(transforms: _TransformType, *, interp: str):
     assert interp in ("bilinear", "nearest"), interp  # noqa
     previous_inters = OrderedDict()
     transforms_iter = get_transform(transforms)
@@ -93,17 +118,19 @@ class SequentialWrapper:
     @overload
     def __init__(self, *, com_transform: _TransformType[Image.Image, Image.Image],
                  image_transform: _TransformType[Image.Image, Tensor],
-                 target_transform: _TransformType[Image.Image, Tensor] = ToLabel()) -> None:
+                 target_transform: _TransformType[Image.Image, Tensor] = ToLabel(),
+                 switch_interpo: Type[switch_interpolation_torchvision]) -> None:
         pass
 
     @overload
     def __init__(self, *, com_transform: _TransformType[Tensor, Tensor],
                  image_transform: _TransformType[Tensor, Tensor],
-                 target_transform: _TransformType[Tensor, Tensor] = ToLabel()) -> None:
+                 target_transform: _TransformType[Tensor, Tensor] = ToLabel(),
+                 switch_interpo: Type[switch_interpolation_kornia]) -> None:
         pass
 
     def __init__(self, *, com_transform=None, image_transform, target_transform=ToLabel(),
-                 switch_interpo=switch_interpolation) -> None:
+                 switch_interpo=switch_interpolation_torchvision) -> None:
         """
         image -> comm_transform -> img_transform -> Tensor
         target -> comm_transform -> target_transform -> Tensor

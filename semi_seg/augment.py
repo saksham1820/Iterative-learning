@@ -1,7 +1,8 @@
 from deepclustering2.augment import pil_augment
 from torchvision import transforms
 
-from contrastyou.augment.sequential_wrapper import SequentialWrapperTwice, SequentialWrapper
+from contrastyou.augment.sequential_wrapper import SequentialWrapperTwice, SequentialWrapper, \
+    switch_interpolation_kornia
 from contrastyou.trainer._utils import Identical
 
 
@@ -113,7 +114,7 @@ class TensorAugment:
             # ColorJitter(brightness=[0.5, 1.5], ),
         ]),
         target_transform=Identical(),
-
+        switch_interpo=switch_interpolation_kornia
     )
     label = SequentialWrapper(
         com_transform=transforms.Compose([
@@ -121,13 +122,15 @@ class TensorAugment:
             RandomRotation(30),
         ]),
         target_transform=Identical(),
-        image_transform=Identical()
+        image_transform=Identical(),
+        switch_interpo=switch_interpolation_kornia
 
     )
     val = SequentialWrapper(
         com_transform=CenterCrop(224),
         target_transform=Identical(),
-        image_transform=Identical()
+        image_transform=Identical(),
+        switch_interpo=switch_interpolation_kornia
     )
 
     trainval = SequentialWrapper(
@@ -135,5 +138,6 @@ class TensorAugment:
             RandomCrop(size=(224, 224), ),
         ]),
         target_transform=Identical(),
-        image_transform=Identical()
+        image_transform=Identical(),
+        switch_interpo=switch_interpolation_kornia
     )
