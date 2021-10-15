@@ -20,7 +20,8 @@ import torch
 from deepclustering2.augment.tensor_augment import TensorRandomFlip
 from deepclustering2.decorator import FixRandomSeed
 from deepclustering2.epoch import _Epocher  # noqa
-from deepclustering2.meters2 import EpochResultDict, AverageValueMeter, UniversalDice, MeterInterface, SurfaceMeter
+from deepclustering2.meters2 import EpochResultDict, AverageValueMeter, UniversalDice, MeterInterface, SurfaceMeter, \
+    MultipleAverageValueMeter
 from deepclustering2.models import Model
 from deepclustering2.optim import get_lrs_from_optimizer
 from deepclustering2.type import T_loader, T_loss, T_optim
@@ -331,7 +332,7 @@ class IterativeEpocher(_UnzipMixin, AugmentMixin, _num_class_mixin, _Epocher):
 
     def __init__(self, alpha: float, num_iter: int, model: Union[Model, nn.Module], optimizer: T_optim,
                  labeled_loader: T_loader,
-                 sup_criterion: T_loss, cur_epoch=0, num_batches=100,
+                 sup_criterion: T_loss, lstm_criterion: T_loss, cur_epoch=0, num_batches=100,
                  device="cpu", **kwargs) -> None:
         super().__init__(model=model, num_batches=num_batches, cur_epoch=cur_epoch, device=device, **kwargs)
         self._alpha = alpha
@@ -339,11 +340,13 @@ class IterativeEpocher(_UnzipMixin, AugmentMixin, _num_class_mixin, _Epocher):
         self._optimizer = optimizer
         self._labeled_loader = labeled_loader
         self._sup_criterion = sup_criterion
+        self._lstm_criterion = lstm_criterion
 
     def _configure_meters(self, meters: MeterInterface) -> MeterInterface:
         C = self.num_classes
         report_axis = list(range(1, C))
         meters.register_meter("lr", AverageValueMeter())
+        meters.register_meter("lstm", MultipleAverageValueMeter())
         meters.register_meter("sup_loss", AverageValueMeter())
         meters.register_meter("sup_dice", UniversalDice(C, report_axises=report_axis, ))
         num_iters = self._num_iter
@@ -363,35 +366,19 @@ class IterativeEpocher(_UnzipMixin, AugmentMixin, _num_class_mixin, _Epocher):
             labeled_image, labeled_target, labeled_filename, _, label_group, teacher_pred = \
                 self._unzip_data(labeled_data, self._device)
             # (5, 1, 224, 224) -> labeled_image.shape
-            labeled_image_dims = labeled_image.shape
-            alpha = self._alpha
-            aggregated_simplex = None
             onehot_target = class2one_hot(labeled_target.squeeze(1), self.num_classes)
-            loss_list = []
-            for ITER in range(self._num_iter):
-                if ITER == 0:
-                    concat = labeled_image
-                else:
-                    concat = torch.cat([labeled_image[:, -1, :, :].reshape(labeled_image_dims[0], 1, 224, 224),
-                                        aggregated_simplex], dim=1)
-                cur_predict = self._model(concat).softmax(1)
+            logits, corrected_logits, errors = self._model(labeled_image)
+            cur_loss = self._sup_criterion(logits.softmax(1), onehot_target)
+            lstm_loss = self._lstm_criterion(corrected_logits, onehot_target)
 
-                if ITER == 0:
-                    aggregated_simplex = cur_predict
-                else:
-                    aggregated_simplex = alpha * aggregated_simplex.detach() + (
-                        1 - alpha) * cur_predict  # todo: try to play with this
-                cur_loss = self._sup_criterion(aggregated_simplex, onehot_target)
-                loss_list.append(cur_loss)
+            with torch.no_grad():
+                self.meters['sup_loss'].add(cur_loss.item())
+                self.meters["sup_dice"].add(logits.max(1)[1], labeled_target.squeeze())
+                self.meters[f"lstm"].add(lstm_loss.tolist())
+                for i in range(self._num_iter):
+                    self.meters[f"itrdice_{i}"].add(corrected_logits[:, i].max(1)[1], labeled_target.squeeze())
 
-                with torch.no_grad():
-                    self.meters[f"itrdice_{ITER}"].add(cur_predict.max(1)[1], labeled_target.squeeze())
-                    self.meters[f"itrloss_{ITER}"].add(cur_loss.item())
-
-            # supervised part
-            if len(loss_list) == 0:
-                raise RuntimeError("no loss there.")
-            total_loss = sum(loss_list)
+            total_loss = sum(cur_loss + lstm_loss)
             # gradient backpropagation
 
             self._optimizer.zero_grad()
@@ -399,8 +386,6 @@ class IterativeEpocher(_UnzipMixin, AugmentMixin, _num_class_mixin, _Epocher):
             self._optimizer.step()
             # recording can be here or in the regularization method
             with torch.no_grad():
-                self.meters["sup_loss"].add(total_loss.item())
-                self.meters["sup_dice"].add(aggregated_simplex.max(1)[1], labeled_target.squeeze())
                 report_dict = self.meters.tracking_status()
                 self._indicator.set_postfix_dict(report_dict)
         return report_dict

@@ -124,7 +124,6 @@ class TensorAugment:
         target_transform=Identical(),
         image_transform=Identical(),
         switch_interpo=switch_interpolation_kornia
-
     )
     val = SequentialWrapper(
         com_transform=CenterCrop(224),

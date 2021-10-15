@@ -10,7 +10,7 @@ Optim:
   weight_decay: 0.00001
 
 Iterations:
-  num_iter: 2
+  num_iter: 3
 
 Aggregator:
   alpha: 0.9

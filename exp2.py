@@ -10,7 +10,7 @@ from scipy.sparse import issparse  # noqa
 from torch.utils.data import DataLoader
 
 from contrastyou import DATA_PATH, CONFIG_PATH
-from contrastyou.arch import UNet
+from contrastyou.arch import LSTM_Corrected_Unet as UNet
 from contrastyou.dataloader._seg_datset import ContrastBatchSampler  # noqa
 from contrastyou.dataloader.acdc_dataset import ACDCDatasetWithTeacherPrediction, ACDCDataset
 from semi_seg.augment import TensorAugment
@@ -49,7 +49,7 @@ val_loader = DataLoader(val_dataset,
 set_benchmark(config.get("RandomSeed", 1))
 trainer_name = config["Trainer"].pop("name")
 Trainer = trainer_zoos[trainer_name]
-model = UNet(**config["Arch"])
+model = UNet(**config["Arch"], seq_len=config["Iterations"]["num_iter"])
 trainer = Trainer(
     model=model, labeled_loader=train_loader, val_loader=val_loader, sup_criterion=KL_div(), test_loader=None,
     memory_bank=None,

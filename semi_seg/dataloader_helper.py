@@ -110,4 +110,3 @@ def create_val_loader(unlabeled_loader, test_loader):
     return val_loader
 
 
-d

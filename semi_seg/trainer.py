@@ -1,17 +1,20 @@
 import os
+from pathlib import Path
+from typing import Tuple
+
 import torch
-from contrastyou import PROJECT_PATH
 from deepclustering2 import optim
 from deepclustering2.configparser import ConfigManger
 from deepclustering2.meters2 import EpochResultDict, StorageIncomeDict
 from deepclustering2.schedulers import GradualWarmupScheduler
 from deepclustering2.trainer import Trainer
 from deepclustering2.type import T_loader, T_loss
-from pathlib import Path
+from torch import nn
+
+from contrastyou import PROJECT_PATH
+from contrastyou.arch.unet_convlstm import LSTMErrorLoss
 from semi_seg.epocher import FullEpocher, IterativeEpocher, IterativeEvalEpocher, TrainEpocher, \
     InferenceEpocher, FullEvalEpocher, InverseIterativeEpocher, InverseIterativeEvalEpocher
-from torch import nn
-from typing import Tuple
 
 cmanager = ConfigManger(Path(PROJECT_PATH) / "config/semi.yaml")
 config = cmanager.config
@@ -52,12 +55,13 @@ class SemiTrainer(Trainer):
         self._init_scheduler(self._optimizer)
 
     def _init(self):
-        self.set_feature_positions(self._config["Trainer"]["feature_names"])
-        feature_importance = self._config["Trainer"]["feature_importance"]
-        assert isinstance(feature_importance, list), type(feature_importance)
-        feature_importance = [float(x) for x in feature_importance]
-        self._feature_importance = [x / sum(feature_importance) for x in feature_importance]
-        assert len(self._feature_importance) == len(self.feature_positions)
+        pass
+        # self.set_feature_positions(self._config["Trainer"]["feature_names"])
+        # feature_importance = self._config["Trainer"]["feature_importance"]
+        # assert isinstance(feature_importance, list), type(feature_importance)
+        # feature_importance = [float(x) for x in feature_importance]
+        # self._feature_importance = [x / sum(feature_importance) for x in feature_importance]
+        # assert len(self._feature_importance) == len(self.feature_positions)
 
     def _init_scheduler(self, optimizer):
         scheduler_dict = self._config.get("Scheduler", None)
@@ -166,16 +170,13 @@ class IterativeTrainer(TensorAugmentMixin, SemiTrainer):
         self._labeled_loader = labeled_loader
         self._val_loader = val_loader
         self._sup_criterion = sup_criterion
-
-    def init(self):
-        self._init_optimizer()
-        self._init_scheduler(self._optimizer)
+        self._lstm_criterion = LSTMErrorLoss()
 
     def _run_epoch(self, *args, **kwargs) -> EpochResultDict:
         trainer = IterativeEpocher(alpha=self._alpha, num_iter=self._num_iter, model=self._model,
                                    optimizer=self._optimizer, labeled_loader=self._labeled_loader,
                                    sup_criterion=self._sup_criterion, device=self._device,
-                                   num_batches=self._num_batches,
+                                   num_batches=self._num_batches, lstm_criterion=self._lstm_criterion,
                                    cur_epoch=self._cur_epoch, augment=self._tra_tensor_augment)
         result = trainer.run()
         return result

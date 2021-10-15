@@ -119,7 +119,7 @@ class SequentialWrapper:
     def __init__(self, *, com_transform: _TransformType[Image.Image, Image.Image],
                  image_transform: _TransformType[Image.Image, Tensor],
                  target_transform: _TransformType[Image.Image, Tensor] = ToLabel(),
-                 switch_interpo: Type[switch_interpolation_torchvision]) -> None:
+                 switch_interpo: Type[switch_interpolation_torchvision] = switch_interpolation_torchvision) -> None:
         pass
 
     @overload
