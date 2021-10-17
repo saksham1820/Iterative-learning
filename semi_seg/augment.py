@@ -108,7 +108,6 @@ class TensorAugment:
             RandomVerticalFlip(),
             RandomHorizontalFlip(),
             RandomCrop(size=(224, 224), ),
-
         ]),
         image_transform=transforms.Compose([
             # ColorJitter(brightness=[0.5, 1.5], ),

@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from functools import lru_cache
 from typing import Callable, List, Tuple, Union, TypeVar, Iterable, overload, Type
 
+import torch
 from PIL import Image
 from torch import Tensor
 from torchvision.transforms import Compose, InterpolationMode
@@ -63,14 +64,16 @@ def switch_interpolation_kornia(transforms: _TransformType, *, interp: str):
     for id_, t in enumerate(transforms_iter):
         if hasattr(t, "resample"):
             previous_inters[id_] = t.resample
-            t.interpolation = interpolation
+            t.resample = interpolation
+            t.flags["interpolation"] = torch.tensor(interpolation.value)
     try:
         yield
     finally:
         transforms_iter = get_transform(transforms)
         for id_, t in enumerate(transforms_iter):
             if hasattr(t, "resample"):
-                t.interpolation = previous_inters[id_]
+                t.resample = previous_inters[id_]
+                t.flags["interpolation"] = torch.tensor(previous_inters[id_].value)
 
 
 @contextmanager
