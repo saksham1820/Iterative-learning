@@ -1,9 +1,11 @@
+import typing as t
+from collections import defaultdict
 from typing import Union, Tuple
 
 import torch
 from deepclustering2.epoch import _Epocher  # noqa
-from deepclustering2.meters2 import EpochResultDict, AverageValueMeter, UniversalDice, MeterInterface, \
-    MultipleAverageValueMeter
+from deepclustering2.meters2 import EpochResultDict, AverageValueMeter, UniversalDice, MeterInterface
+from deepclustering2.meters2.individual_meters import _Metric
 from deepclustering2.models import Model
 from deepclustering2.optim import get_lrs_from_optimizer
 from deepclustering2.type import T_loader, T_loss, T_optim
@@ -14,6 +16,33 @@ from torch.utils.data import DataLoader
 
 from contrastyou.epocher.utils import write_predict, write_img_target  # noqa
 from contrastyou.trainer._utils import ClusterHead  # noqa
+
+
+class AverageValueDictionaryMeter(_Metric):
+    def __init__(self) -> None:
+        super().__init__()
+        self._meter_dicts: t.Dict[str, AverageValueMeter] = defaultdict(AverageValueMeter)
+
+    def reset(self):
+        for k, v in self._meter_dicts.items():
+            v.reset()
+
+    def add(self, **kwargs):
+        for k, v in kwargs.items():
+            self._meter_dicts[k].add(v)
+
+    def summary(self):
+        return {k: v.summary() for k, v in self._meter_dicts.items()}
+
+    def detailed_summary(self):
+        return self.summary()
+
+
+class AverageValueListMeter(AverageValueDictionaryMeter):
+    def add(self, list_value: t.Iterable[float] = None, **kwargs):
+        assert isinstance(list_value, t.Iterable)
+        for i, v in enumerate(list_value):
+            self._meter_dicts[str(i)].add(v)
 
 
 class _num_class_mixin:
@@ -410,7 +439,7 @@ class IterativeEvalEpocher(AugmentMixin, _UnzipMixin, _num_class_mixin, _Epocher
         report_axis = list(range(1, C))
         meters.register_meter("sup_loss", AverageValueMeter())
         meters.register_meter("dice", UniversalDice(C, report_axises=report_axis, ))
-        meters.register_meter("iloss", MultipleAverageValueMeter())
+        meters.register_meter("iloss", AverageValueListMeter())
         for i in range(self.num_iters):
             meters.register_meter(f"idsc{i}", UniversalDice(C, report_axises=report_axis, ))
         return meters
@@ -466,7 +495,7 @@ class IterativeEpocher(_UnzipMixin, AugmentMixin, _num_class_mixin, _Epocher):
         C = self.num_classes
         report_axis = list(range(1, C))
         meters.register_meter("lr", AverageValueMeter())
-        meters.register_meter("lstm", MultipleAverageValueMeter())
+        meters.register_meter("lstm", AverageValueListMeter())
         meters.register_meter("sup_loss", AverageValueMeter())
         meters.register_meter("sup_dice", UniversalDice(C, report_axises=report_axis, ))
         for i in range(self.num_iters):
