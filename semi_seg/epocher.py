@@ -483,17 +483,21 @@ class IterativeEpocher(_UnzipMixin, AugmentMixin, _num_class_mixin, _Epocher):
             labeled_image, labeled_target, labeled_filename, _, label_group, teacher_pred = \
                 self._unzip_data(labeled_data, self._device)
             # (5, 1, 224, 224) -> labeled_image.shape
-            onehot_target = class2one_hot(labeled_target.squeeze(1), self.num_classes)
-            logits, corrected_logits, errors = self._model(labeled_image)
+            labeled_image_, (labeled_target_, teacher_pred_) = self._augment(
+                images=labeled_image, targets=(labeled_target.float(), teacher_pred.float()))
+            labeled_target_ = labeled_target_.long()
+
+            onehot_target = class2one_hot(labeled_target_.squeeze(1), self.num_classes)
+            logits, corrected_logits, errors = self._model(labeled_image_)
             cur_loss = self._sup_criterion(logits.softmax(1), onehot_target)
             lstm_loss = self._lstm_criterion(corrected_logits, onehot_target)
 
             with torch.no_grad():
                 self.meters['sup_loss'].add(cur_loss.item())
-                self.meters["sup_dice"].add(logits.max(1)[1], labeled_target.squeeze(), group_name=label_group)
+                self.meters["sup_dice"].add(logits.max(1)[1], labeled_target_.squeeze(), group_name=label_group)
                 self.meters[f"lstm"].add(lstm_loss.tolist())
                 for _i in range(self.num_iters):
-                    self.meters[f"idsc{_i}"].add(corrected_logits[:, _i].max(1)[1], labeled_target.squeeze(),
+                    self.meters[f"idsc{_i}"].add(corrected_logits[:, _i].max(1)[1], labeled_target_.squeeze(),
                                                  group_name=label_group)
 
             total_loss = sum(cur_loss + lstm_loss)
@@ -509,6 +513,7 @@ class IterativeEpocher(_UnzipMixin, AugmentMixin, _num_class_mixin, _Epocher):
         return report_dict
 
 
+"""
 class InverseIterativeEvalEpocher(AugmentMixin, _UnzipMixin, _num_class_mixin, _Epocher):
 
     def __init__(self, memory_bank, alpha: float, num_iter: int, model: Union[Model, nn.Module], val_loader: T_loader,
@@ -668,7 +673,7 @@ class InverseIterativeEpocher(AugmentMixin, _UnzipMixin, _num_class_mixin, _Epoc
                     report_dict = self.meters.tracking_status()
                     self._indicator.set_postfix_dict(report_dict)
         return report_dict
-
+"""
 # class FullEpocherExp(_num_class_mixin, _Epocher):
 #
 #     def __init__(self, model: Union[Model, nn.Module], optimizer: T_optim, labeled_loader: T_loader,
