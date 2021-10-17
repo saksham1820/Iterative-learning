@@ -53,7 +53,7 @@ class UNet(nn.Module):
         "Up_conv2": 16
     }
 
-    def __init__(self, input_dim=3, num_classes=1):
+    def __init__(self, input_dim=3, num_classes=1, **kwargs):
         super(UNet, self).__init__()
         self.input_dim = input_dim
         self.num_classes = num_classes
