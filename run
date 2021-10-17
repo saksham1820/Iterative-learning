@@ -1,4 +1,7 @@
 #!/bin/bash
+export CUBLAS_WORKSPACE_CONFIG=:4096:8
+export PYTHONOPTIMIZE=1
+
 python experiment.py Trainer.name=full Trainer.save_dir=fs_baseline
 
 python experiment.py Trainer.name=iterative Trainer.save_dir=iteractive_1/detach_false Iterations.num_iter=1 Arch.detach=false

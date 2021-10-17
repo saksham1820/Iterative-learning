@@ -2,6 +2,8 @@ import os
 import typing as t
 import warnings
 
+from contrastyou.augment.helper import fix_all_seed_within_context
+
 warnings.simplefilter("ignore")
 
 from deepclustering2.configparser import ConfigManger
@@ -9,6 +11,8 @@ from deepclustering2.dataloader.sampler import InfiniteRandomSampler
 from deepclustering2.loss import KL_div
 from deepclustering2.utils import gethash
 from deepclustering2.utils import set_benchmark
+import torch
+
 from torch.utils.data import DataLoader
 
 from contrastyou import DATA_PATH, CONFIG_PATH
@@ -19,12 +23,14 @@ from utils import extract_dataset_based_on_num_patients
 
 
 def get_model(trainer_name: str, config: t.Dict[str, t.Dict[str, t.Any]]):
-    if trainer_name == "full":
-        from contrastyou.arch import UNet
-        return UNet(**config["Arch"])
-    elif trainer_name == "iterative":
-        from contrastyou.arch import LSTM_Corrected_Unet as UNet
-        return UNet(**config["Arch"], seq_len=config["Iterations"]["num_iter"])
+    seed = config.get("RandomSeed", 1)
+    with fix_all_seed_within_context(seed=seed):
+        if trainer_name == "full":
+            from contrastyou.arch import UNet
+            return UNet(**config["Arch"])
+        elif trainer_name == "iterative":
+            from contrastyou.arch import LSTM_Corrected_Unet as UNet
+            return UNet(**config["Arch"], seq_len=config["Iterations"]["num_iter"])
 
 
 cur_githash = gethash(__file__)
@@ -32,6 +38,7 @@ cur_githash = gethash(__file__)
 con_manager = ConfigManger(os.path.join(CONFIG_PATH, "semi.yaml"))
 config = con_manager.config
 set_benchmark(config.get("RandomSeed", 1))
+torch.use_deterministic_algorithms(True)
 
 tra_transforms = TensorAugment.pretrain
 val_transforms = TensorAugment.val
