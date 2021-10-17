@@ -26,10 +26,10 @@ def get_model(trainer_name: str, config: t.Dict[str, t.Dict[str, t.Any]]):
     seed = config.get("RandomSeed", 1)
     with fix_all_seed_within_context(seed=seed):
         if trainer_name == "full":
-            from contrastyou.arch import UNet
+            from contrastyou.arch.unet_convlstm import UNet
             return UNet(**config["Arch"])
         elif trainer_name == "iterative":
-            from contrastyou.arch import LSTM_Corrected_Unet as UNet
+            from contrastyou.arch.unet_convlstm import LSTM_Corrected_Unet as UNet
             return UNet(**config["Arch"], seq_len=config["Iterations"]["num_iter"])
 
 
@@ -67,14 +67,20 @@ Trainer = trainer_zoos[trainer_name]
 
 trainer = Trainer(
     model=model, labeled_loader=train_loader, val_loader=val_loader, sup_criterion=KL_div(),
-    configuration={**con_manager.config, **{"GITHASH": cur_githash}}, **config["Trainer"],
+    configuration={**con_manager.config, **{"GITHASH": cur_githash}},
+    **{k: v for k, v in config["Trainer"].items() if k != "freeze_grad"},
     tra_augment=tra_transforms, val_augment=val_transforms
 )
 
 trainer.init()
 
 checkpoint = config.get("Checkpoint", None)
-if checkpoint is not None:
-    trainer.load_state_dict_from_path(checkpoint, strict=False)
+if checkpoint: trainer.load_state_dict_from_path(checkpoint, strict=False)
+
+if config["Trainer"]["freeze_grad"]:
+    try:
+        model.disable_grad(*config["Trainer"]["freeze_grad"])
+    except AttributeError:
+        model._unet.disable_grad(*config["Trainer"]["freeze_grad"])
+
 trainer.start_training()
-# trainer.inference(checkpoint=checkpoint)

@@ -1,5 +1,6 @@
 import typing as t
 from collections import defaultdict
+from functools import lru_cache
 from typing import Union, Tuple
 
 import torch
@@ -53,6 +54,7 @@ class _num_class_mixin:
         return self._model.num_classes
 
     @property
+    @lru_cache()
     def num_iters(self) -> int:
         try:
             return self._model.num_iters

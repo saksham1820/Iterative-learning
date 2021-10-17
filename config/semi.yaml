@@ -40,6 +40,7 @@ Trainer:
   device: cuda
   num_batches: 300
   max_epoch: 50
+  freeze_grad: [ Conv1, Conv5 ]
 
 
 

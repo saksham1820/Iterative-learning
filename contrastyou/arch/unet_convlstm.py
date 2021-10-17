@@ -2,6 +2,7 @@ from collections import OrderedDict
 
 import torch
 from deepclustering2.loss import KL_div
+from loguru import logger
 from torch import nn, Tensor
 
 from contrastyou.arch.conv_rnn import CLSTM_cell2
@@ -55,7 +56,7 @@ class UNet(nn.Module):
         "Up_conv2": 16
     }
 
-    def __init__(self, input_dim=3, num_classes=1):
+    def __init__(self, input_dim=3, num_classes=1, **kwargs):
         super(UNet, self).__init__()
         self.input_dim = input_dim
         self.num_classes = num_classes
@@ -165,6 +166,7 @@ class UNet(nn.Module):
     def enable_grad(self, from_: str, util: str):
         assert from_ in self.component_names, from_
         assert util in self.component_names, util
+        logger.trace(f"Enable gradient from {from_} to {util}")
         from_index = self.component_names.index(from_)
         util_index = self.component_names.index(util)
         assert from_index <= util_index, (from_, util)
@@ -173,6 +175,7 @@ class UNet(nn.Module):
     def disable_grad(self, from_: str, util: str):
         assert from_ in self.component_names, from_
         assert util in self.component_names, util
+        logger.trace(f"Disable gradient from {from_} to {util}")
         from_index = self.component_names.index(from_)
         util_index = self.component_names.index(util)
         assert from_index <= util_index, (from_, util)
