@@ -13,7 +13,7 @@ from deepclustering2.meters2 import EpochResultDict, MeterInterface, AverageValu
 from deepclustering2.optim import get_lrs_from_optimizer
 from deepclustering2.tqdm import tqdm
 from deepclustering2.type import T_loader, T_loss
-from ._utils import preprocess_input_with_twice_transformation, unfold_position, GlobalLabelGenerator, \
+from .utils import preprocess_input_with_twice_transformation, unfold_position, GlobalLabelGenerator, \
     LocalLabelGenerator
 from ..arch import UNetFeatureExtractor
 

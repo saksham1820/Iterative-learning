@@ -225,6 +225,14 @@ class LSTM_Corrected_Unet(nn.Module):
     def num_classes(self):
         return self._unet.num_classes
 
+    @property
+    def num_iter(self):
+        return self._seq_len
+
+    @property
+    def num_iters(self):
+        return self._seq_len
+
 
 class LSTMErrorLoss(nn.Module):
     def __init__(self):
@@ -235,4 +243,6 @@ class LSTMErrorLoss(nn.Module):
         b, t, c, h, w = logits.shape
         assert torch.Size([b, c, h, w]) == onehot.shape
         return self._kl_loss(logits.moveaxis(1, 2).softmax(1),
-                             onehot.unsqueeze(1).repeat(1, t, 1, 1, 1).moveaxis(1, 2)).mean(dim=[0, 2, 3])
+                             onehot.unsqueeze(1).repeat(1, t, 1, 1, 1).moveaxis(1, 2), disable_assert=True).mean(
+            dim=[0, 2, 3],
+            )

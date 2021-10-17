@@ -1,7 +1,7 @@
 RandomSeed: 10
 
 Arch:
-  input_dim: 5
+  input_dim: 1
   num_classes: 4
 
 Optim:
@@ -21,29 +21,23 @@ Scheduler:
 
 Data:
   name: acdc
-  labeled_data_ratio: 1
-  unlabeled_data_ratio: 0.00
+  labeled_num_scans: 10
 
 LabeledData:
   shuffle: true
-  batch_size: 5
-  num_workers: 5
+  batch_size: 10
+  num_workers: 6
 
 ValidationData:
-  shuffle: true
+  shuffle: False
   batch_size: 5
   num_workers: 1
 
-UnlabeledData:
-  shuffle: true
-  batch_size: 10
-  num_workers: 4
-
 Trainer:
-  name: inv_iterative
+  name: full
   save_dir: tmp
   device: cuda
-  num_batches: 500
+  num_batches: 300
   max_epoch: 50
 
 

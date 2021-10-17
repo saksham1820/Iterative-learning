@@ -199,6 +199,10 @@ class UNet(nn.Module):
             weights[name] = p.norm().item()
         return weights
 
+    @property
+    def num_iters(self):
+        return 0
+
 
 class FeatureExtractor:
     encoder_names = ["Conv1", "Conv2", "Conv3", "Conv4", "Conv5"]

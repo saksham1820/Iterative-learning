@@ -1,0 +1,5 @@
+#!/bin/bash
+python experiment.py Trainer.name=full Trainer.save_dir=fs_baseline
+python experiment.py Trainer.name=iterative Trainer.save_dir=iteractive_1 Iterations.num_iter=1
+python experiment.py Trainer.name=iterative Trainer.save_dir=iteractive_2 Iterations.num_iter=2
+python experiment.py Trainer.name=iterative Trainer.save_dir=iteractive_3 Iterations.num_iter=3

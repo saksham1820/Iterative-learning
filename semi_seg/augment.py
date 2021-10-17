@@ -98,13 +98,13 @@ class ACDCTensorTransforms:
 
 
 from kornia.augmentation import RandomRotation, RandomVerticalFlip, RandomHorizontalFlip, RandomCrop, \
-    CenterCrop
+    CenterCrop, ColorJitter
 
 
 class TensorAugment:
     pretrain = SequentialWrapper(
         com_transform=transforms.Compose([
-            RandomRotation(45),
+            RandomRotation(45, p=0.9),
             RandomVerticalFlip(),
             RandomHorizontalFlip(),
             RandomCrop(size=(224, 224), ),
@@ -127,15 +127,6 @@ class TensorAugment:
     )
     val = SequentialWrapper(
         com_transform=CenterCrop(224),
-        target_transform=Identical(),
-        image_transform=Identical(),
-        switch_interpo=switch_interpolation_kornia
-    )
-
-    trainval = SequentialWrapper(
-        com_transform=transforms.Compose([
-            RandomCrop(size=(224, 224), ),
-        ]),
         target_transform=Identical(),
         image_transform=Identical(),
         switch_interpo=switch_interpolation_kornia

@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from contrastyou.epocher._utils import unfold_position
+from contrastyou.epocher.utils import unfold_position
 from contrastyou.helper import average_iter
 from deepclustering2 import optim
 from deepclustering2.decorator import FixRandomSeed

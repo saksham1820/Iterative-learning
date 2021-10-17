@@ -75,5 +75,5 @@ def extract_dataset_based_on_num_patients(*num_patients: int, dataset: 'ACDCData
 
     sub_datasets = [extract_sub_dataset_based_on_scan_names(dataset, scan_list_permuted[x:y]) for x, y in
                     _two_element_iter(cutting_points)]
-    assert sum([len(set(x.get_scan_list())) for x in sub_datasets]) == len(scan_list)
-    return sub_datasets
+    # assert sum([len(set(x.get_group_list())) for x in sub_datasets]) == len(scan_list)
+    return tuple(sub_datasets)

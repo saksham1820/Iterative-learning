@@ -1,52 +1,45 @@
 import os
+import typing as t
+from abc import abstractmethod
 from pathlib import Path
 from typing import Tuple
 
 import torch
 from deepclustering2 import optim
-from deepclustering2.configparser import ConfigManger
 from deepclustering2.meters2 import EpochResultDict, StorageIncomeDict
 from deepclustering2.schedulers import GradualWarmupScheduler
 from deepclustering2.trainer import Trainer
 from deepclustering2.type import T_loader, T_loss
-from torch import nn
+from torch import nn, Tensor
 
 from contrastyou import PROJECT_PATH
 from contrastyou.arch.unet_convlstm import LSTMErrorLoss
-from semi_seg.epocher import FullEpocher, IterativeEpocher, IterativeEvalEpocher, TrainEpocher, \
-    InferenceEpocher, FullEvalEpocher, InverseIterativeEpocher, InverseIterativeEvalEpocher
+from semi_seg.epocher import FullEpocher, IterativeEpocher, IterativeEvalEpocher, \
+    FullEvalEpocher
 
-cmanager = ConfigManger(Path(PROJECT_PATH) / "config/semi.yaml")
-config = cmanager.config
+__all__ = ["trainer_zoos", "FullTrainer", "IterativeTrainer"]
 
-__all__ = ["trainer_zoos"]
+type_augment = t.Callable[[Tensor, Tensor], t.Tuple[Tensor, Tensor]]
 
 
-class TensorAugmentMixin:
+class TensorAugmentPlugin:
 
-    def __init__(self, *, tra_augment, val_augment, **kwargs) -> None:
+    def __init__(self, *, tra_augment: type_augment, val_augment: type_augment, **kwargs) -> None:
+        self._tra_tensor_augment: type_augment = tra_augment
+        self._val_tensor_augment: type_augment = val_augment
         super().__init__(**kwargs)
-        self._tra_tensor_augment = tra_augment
-        self._val_tensor_augment = val_augment
 
 
-class SemiTrainer(Trainer):
+class BaseTrainer(TensorAugmentPlugin, Trainer, ):
     RUN_PATH = str(Path(PROJECT_PATH) / "semi_seg" / "runs")  # noqa
 
-    feature_positions = ["Up_conv4", "Up_conv3"]
-
-    def __init__(self, *, alpha: float = config["Aggregator"]["alpha"],
-                 num_iter: int = config["Iterations"]["num_iter"],
-                 model: nn.Module, labeled_loader: T_loader, unlabeled_loader: T_loader,
-                 val_loader: T_loader,
-                 sup_criterion: T_loss, save_dir: str = "base",
-                 max_epoch: int = 100, num_batches: int = 100, device: str = "cpu", configuration=None, **kwargs):
-        super().__init__(model, save_dir, max_epoch, num_batches, device, configuration)
-
+    def __init__(self, *, model: nn.Module, labeled_loader: T_loader, val_loader: T_loader,
+                 sup_criterion: T_loss, save_dir: str = "base", max_epoch: int = 100, num_batches: int = 100,
+                 device: str = "cpu", configuration, **kwargs):
+        super().__init__(model=model, save_dir=save_dir, max_epoch=max_epoch, num_batches=num_batches, device=device,
+                         configuration=configuration, **kwargs)
         self._labeled_loader = labeled_loader
-        self._unlabeled_loader = unlabeled_loader
         self._val_loader = val_loader
-        # self._test_loader = test_loader
         self._sup_criterion = sup_criterion
 
     def init(self):
@@ -56,12 +49,6 @@ class SemiTrainer(Trainer):
 
     def _init(self):
         pass
-        # self.set_feature_positions(self._config["Trainer"]["feature_names"])
-        # feature_importance = self._config["Trainer"]["feature_importance"]
-        # assert isinstance(feature_importance, list), type(feature_importance)
-        # feature_importance = [float(x) for x in feature_importance]
-        # self._feature_importance = [x / sum(feature_importance) for x in feature_importance]
-        # assert len(self._feature_importance) == len(self.feature_positions)
 
     def _init_scheduler(self, optimizer):
         scheduler_dict = self._config.get("Scheduler", None)
@@ -85,29 +72,13 @@ class SemiTrainer(Trainer):
             **{k: v for k, v in optim_dict.items() if k != "name"}
         )
 
+    @abstractmethod
     def _run_epoch(self, *args, **kwargs) -> EpochResultDict:
-        trainer = TrainEpocher(
-            self._model, self._optimizer, self._labeled_loader, self._unlabeled_loader,
-            self._sup_criterion, 0, self._num_batches, self._cur_epoch, self._device,
-            feature_position=self.feature_positions, feature_importance=self._feature_importance
-        )
-        result = trainer.run()
-        return result
+        ...
 
+    @abstractmethod
     def _eval_epoch(self, *, loader: T_loader, **kwargs) -> Tuple[EpochResultDict, float]:
-        mem_bank = {}
-        temp = list(loader)
-        for i in range(len(temp)):
-            for file in temp[i][1]:
-                temp_dic[file] = None
-
-        evaler = InverseIterativeEvalEpocher(model=self._model, val_loader=loader, memory_bank=mem_bank,
-                                             sup_criterion=self._sup_criterion,
-                                             cur_epoch=self._cur_epoch, device=self._device,
-                                             num_iter=config["Iterations"]["num_iter"],
-                                             alpha=config["Aggregator"]["alpha"])
-        result, cur_score = evaler.run()
-        return result, cur_score
+        ...
 
     def _start_training(self):
         for self._cur_epoch in range(self._start_epoch, self._max_epoch):
@@ -117,10 +88,7 @@ class SemiTrainer(Trainer):
             train_result = self.run_epoch()
             with torch.no_grad():
                 eval_result, cur_score = self.eval_epoch(loader=self._val_loader)
-            #    test_result = {}
-            #    if self._test_loader is not None:
-            #        test_result, _ = self.eval_epoch(loader=self._test_loader)
-            # update lr_scheduler
+
             if hasattr(self, "_scheduler"):
                 self._scheduler.step()
             storage_per_epoch = StorageIncomeDict(tra=train_result, val=eval_result)  # , test=test_result)
@@ -150,84 +118,64 @@ class SemiTrainer(Trainer):
         result, cur_score = evaler.run()
         return result, cur_score
 
-    @classmethod
-    def set_feature_positions(cls, feature_positions):
-        cls.feature_positions = feature_positions
 
+class FullTrainer(BaseTrainer):
 
-class IterativeTrainer(TensorAugmentMixin, SemiTrainer):
-
-    def __init__(self, *, alpha: float, num_iter: int, model: nn.Module, labeled_loader: T_loader, val_loader: T_loader,
-                 sup_criterion: T_loss, save_dir: str = "base", max_epoch: int = 100,
-                 num_batches: int = 100, device: str = "cpu", configuration=None, **kwargs):
-        super().__init__(model=model, labeled_loader=labeled_loader, unlabeled_loader=None,
-                         val_loader=val_loader, sup_criterion=sup_criterion, save_dir=save_dir,
-                         max_epoch=max_epoch, num_batches=num_batches, device=device,
-                         configuration=configuration,
-                         **kwargs)
-        self._alpha = alpha
-        self._num_iter = num_iter
-        self._labeled_loader = labeled_loader
-        self._val_loader = val_loader
-        self._sup_criterion = sup_criterion
-        self._lstm_criterion = LSTMErrorLoss()
-
-    def _run_epoch(self, *args, **kwargs) -> EpochResultDict:
-        trainer = IterativeEpocher(alpha=self._alpha, num_iter=self._num_iter, model=self._model,
-                                   optimizer=self._optimizer, labeled_loader=self._labeled_loader,
-                                   sup_criterion=self._sup_criterion, device=self._device,
-                                   num_batches=self._num_batches, lstm_criterion=self._lstm_criterion,
-                                   cur_epoch=self._cur_epoch, augment=self._tra_tensor_augment)
-        result = trainer.run()
-        return result
-
-    def _eval_epoch(self, *, loader: T_loader, **kwargs) -> Tuple[EpochResultDict, float]:
-        evaler = IterativeEvalEpocher(model=self._model, val_loader=loader,
-                                      sup_criterion=self._sup_criterion,
-                                      cur_epoch=self._cur_epoch, device=self._device,
-                                      num_iter=config["Iterations"]["num_iter"], alpha=config["Aggregator"]["alpha"])
-        result, cur_score = evaler.run()
-        return result, cur_score
-
-
-class FullTrainer(TensorAugmentMixin, SemiTrainer):
-
-    def __init__(self, *, model: nn.Module, labeled_loader: T_loader,
-                 val_loader: T_loader, test_loader: T_loader,
-                 sup_criterion: T_loss, save_dir: str = "base", max_epoch: int = 100,
-                 num_batches: int = 100, device: str = "cpu", configuration=None,
-                 **kwargs):
-        super().__init__(model=model, labeled_loader=labeled_loader, unlabeled_loader=None, test_loader=test_loader,
-                         val_loader=val_loader, sup_criterion=sup_criterion, save_dir=save_dir,
-                         max_epoch=max_epoch, num_batches=num_batches, device=device,
-                         configuration=configuration,
-                         **kwargs)
-
-        self._labeled_loader = labeled_loader
-        self._val_loader = val_loader
-        self._sup_criterion = sup_criterion
-
-    def init(self):
-        self._init_optimizer()
-        self._init_scheduler(self._optimizer)
+    def __init__(self, *, model: nn.Module, labeled_loader: T_loader, val_loader: T_loader, sup_criterion: T_loss,
+                 save_dir: str = "base", max_epoch: int = 100, num_batches: int = 100, device: str = "cpu",
+                 configuration, **kwargs):
+        super().__init__(model=model, labeled_loader=labeled_loader, val_loader=val_loader, sup_criterion=sup_criterion,
+                         save_dir=save_dir, max_epoch=max_epoch, num_batches=num_batches, device=device,
+                         configuration=configuration, **kwargs)
+        assert self._model.num_iters == 0
 
     def _run_epoch(self, *args, **kwargs) -> EpochResultDict:
         trainer = FullEpocher(model=self._model, optimizer=self._optimizer, labeled_loader=self._labeled_loader,
                               sup_criterion=self._sup_criterion, device=self._device, cur_epoch=self._cur_epoch,
-                              num_batches=self._num_batches)
+                              num_batches=self._num_batches, augment=self._tra_tensor_augment)
         result = trainer.run()
         return result
 
     def _eval_epoch(self, *, loader: T_loader, **kwargs) -> Tuple[EpochResultDict, float]:
-        evaler = FullEvalEpocher(model=self._model, val_loader=loader,
-                                 # todo: remove the iterative thing for the Full trainer.
+        evaler = FullEvalEpocher(model=self._model, loader=loader,
                                  sup_criterion=self._sup_criterion,
-                                 cur_epoch=self._cur_epoch, device=self._device)
+                                 cur_epoch=self._cur_epoch, device=self._device, augment=self._val_tensor_augment)
         result, cur_score = evaler.run()
         return result, cur_score
 
 
-class InverseIterativeTrainer(TensorAugmentMixin, SemiTrainer):
+class IterativeTrainer(BaseTrainer):
+
+    def __init__(self, *, model: nn.Module, labeled_loader: T_loader, val_loader: T_loader, sup_criterion: T_loss,
+                 save_dir: str = "base", max_epoch: int = 100, num_batches: int = 100, device: str = "cpu",
+                 configuration, **kwargs):
+        super().__init__(model=model, labeled_loader=labeled_loader, val_loader=val_loader, sup_criterion=sup_criterion,
+                         save_dir=save_dir, max_epoch=max_epoch, num_batches=num_batches, device=device,
+                         configuration=configuration, **kwargs)
+        self._lstm_criterion = LSTMErrorLoss()
+        assert self._model.num_iters > 0
+
+    def _run_epoch(self, *args, **kwargs) -> EpochResultDict:
+        trainer = IterativeEpocher(model=self._model,
+                                   optimizer=self._optimizer, labeled_loader=self._labeled_loader,
+                                   sup_criterion=self._sup_criterion, device=self._device,
+                                   num_batches=self._num_batches, lstm_criterion=self._lstm_criterion,
+                                   cur_epoch=self._cur_epoch, augment=self._tra_tensor_augment, **kwargs)
+        result = trainer.run()
+        return result
+
+    def _eval_epoch(self, *, loader: T_loader, **kwargs) -> Tuple[EpochResultDict, float]:
+        evaler = IterativeEvalEpocher(model=self._model, loader=loader,
+                                      sup_criterion=self._sup_criterion,
+                                      cur_epoch=self._cur_epoch, device=self._device,
+                                      lstm_criterion=self._lstm_criterion, augment=self._val_tensor_augment,
+                                      )
+        result, cur_score = evaler.run()
+        return result, cur_score
+
+
+"""
+class InverseIterativeTrainer(BaseTrainer):
 
     def __init__(self, *, memory_bank, alpha: float, num_iter: int, model: nn.Module, labeled_loader: T_loader,
                  val_loader: T_loader,
@@ -273,10 +221,10 @@ class InverseIterativeTrainer(TensorAugmentMixin, SemiTrainer):
                                              alpha=config["Aggregator"]["alpha"])
         result, cur_score = evaler.run()
         return result, cur_score
-
+"""
 
 trainer_zoos = {
     "full": FullTrainer,
     "iterative": IterativeTrainer,
-    "inv_iterative": InverseIterativeTrainer
+    # "inv_iterative": InverseIterativeTrainer
 }

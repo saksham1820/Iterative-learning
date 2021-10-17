@@ -15,7 +15,7 @@ from deepclustering2.utils import class2one_hot
 from torch import nn
 from torch.utils.data import DataLoader
 
-from ._utils import preprocess_input_with_single_transformation, preprocess_input_with_twice_transformation
+from .utils import preprocess_input_with_single_transformation, preprocess_input_with_twice_transformation
 
 
 class EvalEpoch(_Epocher):
