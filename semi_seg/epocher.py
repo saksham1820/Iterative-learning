@@ -222,7 +222,6 @@ class InverseIterativeEpocher2(_UnzipMixin, _num_class_mixin, _Epocher):
                 self._indicator.set_postfix_dict(report_dict)
         return report_dict
 """
-
 """
 class TrainEpocher(_num_class_mixin, _Epocher):
 
@@ -350,8 +349,8 @@ class FullEvalEpocher(_UnzipMixin, AugmentMixin, _num_class_mixin, _Epocher):
         for i, data in zip(self._indicator, self._loader):
             image, target, filename, _, group_name, teacher_pred = \
                 self._unzip_data(data, self._device)
-            image_, (target_, teacher_pred_) = self._augment(
-                images=image, targets=(target.float(), teacher_pred.float()))
+            (image_, teacher_pred_), target_ = self._augment(
+                images=(image, teacher_pred.float()), targets=target.float())
             target_ = target_.long()
 
             predict_logits = self._model(image_)
@@ -395,8 +394,8 @@ class FullEpocher(AugmentMixin, _UnzipMixin, _num_class_mixin, _Epocher):
             labeled_image, labeled_target, labeled_filename, _, label_group, teacher_pred = \
                 self._unzip_data(labeled_data, self._device)
 
-            labeled_image_, (labeled_target_, teacher_pred_) = self._augment(
-                images=labeled_image, targets=(labeled_target.float(), teacher_pred.float()))
+            (labeled_image_, teacher_pred_), labeled_target_ = self._augment(
+                images=(labeled_image, teacher_pred.float()), targets=labeled_target.float())
             labeled_target_ = labeled_target_.long()
 
             predict_logits = self._model(labeled_image_)
@@ -453,8 +452,8 @@ class IterativeEvalEpocher(AugmentMixin, _UnzipMixin, _num_class_mixin, _Epocher
             image, target, filename, _, group_name, teacher_pred = \
                 self._unzip_data(data, self._device)
 
-            image_, (target_, teacher_pred_) = self._augment(
-                images=image, targets=(target.float(), teacher_pred.float()))
+            (image_, teacher_pred_), target_ = self._augment(
+                images=(image, teacher_pred.float()), targets=target.float())
             target_ = target_.long()
             onehot_target = class2one_hot(target_.squeeze(1), self.num_classes)
 
@@ -512,8 +511,8 @@ class IterativeEpocher(_UnzipMixin, AugmentMixin, _num_class_mixin, _Epocher):
             labeled_image, labeled_target, labeled_filename, _, label_group, teacher_pred = \
                 self._unzip_data(labeled_data, self._device)
             # (5, 1, 224, 224) -> labeled_image.shape
-            labeled_image_, (labeled_target_, teacher_pred_) = self._augment(
-                images=labeled_image, targets=(labeled_target.float(), teacher_pred.float()))
+            (labeled_image_, teacher_pred_), labeled_target_ = self._augment(
+                images=(labeled_image, teacher_pred.float()), targets=labeled_target.float())
             labeled_target_ = labeled_target_.long()
 
             onehot_target = class2one_hot(labeled_target_.squeeze(1), self.num_classes)
