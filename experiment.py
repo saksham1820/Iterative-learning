@@ -7,7 +7,6 @@ warnings.simplefilter("ignore")
 from deepclustering2.configparser import ConfigManger
 from deepclustering2.dataloader.sampler import InfiniteRandomSampler
 from deepclustering2.loss import KL_div
-from deepclustering2.utils import gethash
 from deepclustering2.utils import set_benchmark
 import torch
 
@@ -28,11 +27,17 @@ def get_model(trainer_name: str, config: t.Dict[str, t.Dict[str, t.Any]]):
             from contrastyou.arch.unet_convlstm import UNet
             return UNet(**config["Arch"])
         elif trainer_name == "iterative":
-            from contrastyou.arch.unet_convlstm import LSTM_Corrected_Unet as UNet
-            return UNet(**config["Arch"], seq_len=config["Iterations"]["num_iter"])
+            if config["Arch"]["name"] == "type1":
+                from contrastyou.arch.unet_convlstm import LSTM_Corrected_Unet as UNet
+                return UNet(**config["Arch"], seq_len=config["Iterations"]["num_iter"])
+            elif config["Arch"]["name"] == "type2":
+                from contrastyou.arch.iterative import RefinementModel
+                return RefinementModel(**config["Arch"], seq_len=config["Iterations"]["num_iter"])
+            else:
+                raise NotImplemented(config["Arch"]["name"])
+        else:
+            raise NotImplemented(trainer_name)
 
-
-cur_githash = gethash(__file__)
 
 con_manager = ConfigManger(os.path.join(CONFIG_PATH, "semi.yaml"))
 config = con_manager.config
@@ -66,8 +71,7 @@ Trainer = trainer_zoos[trainer_name]
 
 trainer = Trainer(
     model=model, labeled_loader=train_loader, val_loader=val_loader, sup_criterion=KL_div(),
-    configuration={**con_manager.config, **{"GITHASH": cur_githash}},
-    **{k: v for k, v in config["Trainer"].items() if k != "freeze_grad"},
+    configuration=con_manager.config, **{k: v for k, v in config["Trainer"].items() if k != "freeze_grad"},
     tra_augment=tra_transforms, val_augment=val_transforms
 )
 
