@@ -5,9 +5,9 @@ from deepclustering2.loss import KL_div
 from loguru import logger
 from torch import nn, Tensor
 
-from contrastyou.arch.conv_rnn import CLSTM_cell2
-
 __all__ = ["UNet"]
+
+from contrastyou.arch.conv_rnn import CLSTM_cell3
 
 
 class conv_block(nn.Module):
@@ -210,7 +210,7 @@ class LSTM_Corrected_Unet(nn.Module):
     def __init__(self, *, input_dim=3, num_classes=1, num_features=32, seq_len=3, detach=False, ):
         super().__init__()
         self._unet = UNet(input_dim=input_dim, num_classes=num_classes)
-        self._correct_model = CLSTM_cell2(
+        self._correct_model = CLSTM_cell3(
             shape=(224, 224,),
             input_channels=input_dim,
             filter_size=3,

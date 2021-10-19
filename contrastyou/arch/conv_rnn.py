@@ -288,6 +288,87 @@ class CLSTM_cell2(nn.Module):
         return hy, (hx, cx)
 
 
+class CLSTM_cell3(nn.Module):
+    """This cell is used to unbound the error, without any normalization. """
+
+    def __init__(self, shape: t.Tuple[int, int], input_channels: int, filter_size: single_or_tup2[int], class_num: int,
+                 num_features: int):
+        super().__init__()
+        self.shape = shape  # H, W
+        self.input_channels = input_channels
+        self.filter_size = filter_size
+        self.num_features = num_features
+        self.class_num = class_num
+        # in this way the output has the same size
+        self.padding = (filter_size - 1) // 2
+        self.conv = nn.Sequential(
+            nn.Conv2d(self.input_channels + self.num_features + self.class_num,
+                      4 * self.num_features, self.filter_size, (1, 1),
+                      self.padding),
+            nn.GroupNorm(4 * self.num_features // 32, 4 * self.num_features))
+        self.squeeze = nn.Sequential(nn.Conv2d(self.num_features, class_num, (1, 1), ),
+                                     )
+
+    def forward(self, image: Tensor, logits: Tensor, *, hidden_state: t.Tuple[Tensor, Tensor] = None, seq_len: int):
+        assert seq_len > 0
+        cur_device = next(self.parameters()).device
+        _, c_image, _, _ = image.shape
+
+        B, c_pred, H, W = logits.shape
+
+        if hidden_state is None:
+            hx = torch.zeros(*(B, self.num_features, self.shape[0],
+                               self.shape[1]), device=cur_device)
+            cx = torch.zeros_like(hx)
+        else:
+            hx, cx = hidden_state
+        errors = []
+        refined_output = []
+        for index in range(seq_len):
+            if index == 0:
+                cur_logits = logits
+                # norm_cur_logits = self.zero_one_normalize(cur_logits)
+                norm_cur_logits = cur_logits
+                state_input = torch.cat([image, norm_cur_logits], dim=1)
+            else:
+                cur_logits = logits + sum(errors)
+                # norm_cur_logits = self.zero_one_normalize(cur_logits)
+                norm_cur_logits = cur_logits
+                state_input = torch.cat([image, norm_cur_logits], dim=1)
+
+            hy, (hx, cx) = self.iterate(state_input, (hx, cx))
+            error = self.squeeze(hy)
+            errors.append(error)
+            refined_output.append(cur_logits + error)
+        return torch.stack(errors, dim=1), torch.stack(refined_output, dim=1)
+
+    @staticmethod
+    def zero_one_normalize(logits: Tensor):
+        logits = logits - logits.min().detach()
+        logits = logits / (logits.max().detach() - logits.min().detach() + 1e-6)
+        return logits
+
+    def iterate(self, step_input: Tensor, hidden_state: t.Tuple[Tensor, Tensor]) -> \
+        t.Tuple[Tensor, t.Tuple[Tensor, Tensor]]:
+        hx, cx = hidden_state
+
+        combined = torch.cat((step_input, hx), 1)
+        gates = self.conv(combined)  # gates: S, num_features*4, H, W
+        # it should return 4 tensors: i,f,g,o
+        ingate, forgetgate, cellgate, outgate = torch.split(
+            gates, self.num_features, dim=1)
+        ingate = torch.sigmoid(ingate)
+        forgetgate = torch.sigmoid(forgetgate)
+        cellgate = torch.tanh(cellgate)
+        outgate = torch.sigmoid(outgate)
+
+        cy = (forgetgate * cx) + (ingate * cellgate)
+        hy = outgate * torch.tanh(cy)
+        hx = hy
+        cx = cy
+        return hy, (hx, cx)
+
+
 class Encoder(nn.Module):
     def __init__(self, subnets, rnns):
         super().__init__()

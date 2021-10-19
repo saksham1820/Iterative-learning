@@ -2,8 +2,6 @@ import os
 import typing as t
 import warnings
 
-from contrastyou.augment.helper import fix_all_seed_within_context
-
 warnings.simplefilter("ignore")
 
 from deepclustering2.configparser import ConfigManger
@@ -20,6 +18,7 @@ from contrastyou.dataloader.acdc_dataset import ACDCDatasetWithTeacherPrediction
 from semi_seg.augment import TensorAugment
 from semi_seg.trainer import trainer_zoos
 from utils import extract_dataset_based_on_num_patients
+from contrastyou.augment.helper import fix_all_seed_within_context
 
 
 def get_model(trainer_name: str, config: t.Dict[str, t.Dict[str, t.Any]]):
@@ -77,7 +76,7 @@ trainer.init()
 checkpoint = config.get("Checkpoint", None)
 if checkpoint: trainer.load_state_dict_from_path(checkpoint, strict=False)
 
-if config["Trainer"]["freeze_grad"]:
+if config["Trainer"].get("freeze_grad"):
     try:
         model.disable_grad(*config["Trainer"]["freeze_grad"])
     except AttributeError:
