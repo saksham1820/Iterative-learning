@@ -66,6 +66,7 @@ val_loader = DataLoader(
 
 trainer_name = config["Trainer"].pop("name")
 
+
 model = get_model(trainer_name, config)
 Trainer = trainer_zoos[trainer_name]
 

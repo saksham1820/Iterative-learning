@@ -2,9 +2,13 @@ RandomSeed: 10
 
 Arch:
   name: type1
+  layer_dim: 112
+  codec: encoder
   input_dim: 1
   num_classes: 4
+  num_features: 32
   detach: false
+  iter_to_use: 2
 
 Optim:
   name: Adam
@@ -36,7 +40,7 @@ ValidationData:
   num_workers: 1
 
 Trainer:
-  name: full
+  name: iterative
   save_dir: tmp
   device: cuda
   num_batches: 300

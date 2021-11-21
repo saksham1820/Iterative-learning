@@ -461,18 +461,18 @@ class IterativeEvalEpocher(AugmentMixin, _UnzipMixin, _num_class_mixin, _Epocher
 
             logits, corrected_logits, errors = self._model(image_)
             sup_loss = self._sup_criterion(logits.softmax(1), onehot_target, disable_assert=True)
-            lstm_loss = self._lstm_criterion(corrected_logits, onehot_target)
+            #lstm_loss = self._lstm_criterion(corrected_logits, onehot_target)
 
             with torch.no_grad():
                 self.meters["sup_loss"].add(sup_loss.item())
                 self.meters["dice"].add(logits.max(1)[1], target_.squeeze(1), group_name=group_name)
-                self.meters["iloss"].add(lstm_loss.tolist())
+                #self.meters["iloss"].add(lstm_loss.tolist())
 
-                for _i in range(self.num_iters):
-                    self.meters[f"idsc{_i}"].add(corrected_logits[:, _i].max(1)[1], target_.squeeze(),
-                                                 group_name=group_name)
+                # for _i in range(self.num_iters):
+                #     self.meters[f"idsc{_i}"].add(corrected_logits[:, _i].max(1)[1], target_.squeeze(),
+                #                                  group_name=group_name)
 
-            total_loss = sup_loss + lstm_loss.mean()
+            total_loss = sup_loss# + lstm_loss.mean()
 
             report_dict = self.meters.tracking_status()
             self._indicator.set_postfix_dict(report_dict)
@@ -516,21 +516,22 @@ class IterativeEpocher(_UnzipMixin, AugmentMixin, _num_class_mixin, _Epocher):
             (labeled_image_, teacher_pred_), labeled_target_ = self._augment(
                 images=(labeled_image, teacher_pred.float()), targets=labeled_target.float())
             labeled_target_ = labeled_target_.long()
-
+            #breakpoint()
             onehot_target = class2one_hot(labeled_target_.squeeze(1), self.num_classes)
             logits, corrected_logits, errors = self._model(labeled_image_)
             cur_loss = self._sup_criterion(logits.softmax(1), onehot_target)
-            lstm_loss = self._lstm_criterion(corrected_logits, onehot_target)
+
+            #lstm_loss = self._lstm_criterion(corrected_logits, onehot_target)
 
             with torch.no_grad():
                 self.meters['sup_loss'].add(cur_loss.item())
                 self.meters["sup_dice"].add(logits.max(1)[1], labeled_target_.squeeze(), group_name=label_group)
-                self.meters[f"lstm"].add(lstm_loss.tolist())
-                for _i in range(self.num_iters):
-                    self.meters[f"idsc{_i}"].add(corrected_logits[:, _i].max(1)[1], labeled_target_.squeeze(),
-                                                 group_name=label_group)
+                # self.meters[f"lstm"].add(lstm_loss.tolist())
+                # for _i in range(self.num_iters):
+                #     self.meters[f"idsc{_i}"].add(corrected_logits[:, _i].max(1)[1], labeled_target_.squeeze(),
+                #                                  group_name=label_group)
 
-            total_loss = sum(cur_loss + lstm_loss)
+            total_loss = cur_loss#sum(cur_loss + lstm_loss)
             # gradient backpropagation
 
             self._optimizer.zero_grad()
