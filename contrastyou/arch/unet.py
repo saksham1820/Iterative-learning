@@ -132,6 +132,209 @@ class UNet(nn.Module):
             return d1, (e5, e4, e3, e2, e1), (d5, d4, d3, d2)
         return d1
 
+    def forward1(self, x, layer_dim, codec, return_features=False):
+        # encoding path
+
+        def dim224encoder():
+            e1 = self.Conv1(x)  # 16 224 224
+            # e1-> Conv1
+
+            return e1
+
+        def dim112encoder():
+            e1 = dim224encoder()
+
+            e2 = self.Maxpool1(e1)
+            e2 = self.Conv2(e2)  # 32 112 112
+            # e2 -> Conv2
+
+            return (e1, e2)
+
+        def dim56encoder():
+            e1, e2 = dim112encoder()
+
+            e3 = self.Maxpool2(e2)
+            e3 = self.Conv3(e3)  # 64 56 56
+            # e3->Conv3
+
+            return (e1, e2, e3)
+
+        def dim28encoder():
+            e1, e2, e3 = dim56encoder()
+
+            e4 = self.Maxpool3(e3)
+            e4 = self.Conv4(e4)  # 128 28 28
+            # e4->Conv4
+
+            return (e1, e2, e3, e4)
+
+        def dim14encoder():
+            e1, e2, e3, e4 = dim28encoder()
+
+            e5 = self.Maxpool4(e4)
+            e5 = self.Conv5(e5)  # 256 14 14
+            # e5->Conv5
+
+            return (e1, e2, e3, e4, e5)
+        # decoding + concat path
+        def dim28decoder():
+            e1, e2, e3, e4, e5 = dim14encoder()
+
+            d5 = self.Up5(e5)
+            d5 = torch.cat((e4, d5), dim=1)
+            d5 = self.Up_conv5(d5)  # 128 28 28
+            # d5->Up5+Up_conv5
+
+            return (e1, e2, e3, e4, e5, d5)
+
+        def dim56decoder():
+            e1, e2, e3, e4, e5, d5 = dim28decoder()
+
+            d4 = self.Up4(d5)
+            d4 = torch.cat((e3, d4), dim=1)
+            d4 = self.Up_conv4(d4)  # 64 56 56
+            # d4->Up4+Up_conv4
+
+            return (e1, e2, e3, e4, e5, d5, d4)
+
+        def dim112decoder():
+            e1, e2, e3, e4, e5, d5, d4 = dim56decoder()
+
+            d3 = self.Up3(d4)
+            d3 = torch.cat((e2, d3), dim=1)
+            d3 = self.Up_conv3(d3)  # 32 112 112
+            # d3->Up3+upconv3
+
+            return (e1, e2, e3, e4, e5, d5, d4, d3)
+
+        def dim224decoder():
+            e1, e2, e3, e4, e5, d5, d4, d3 = dim112decoder()
+
+            d2 = self.Up2(d3)
+            d2 = torch.cat((e1, d2), dim=1)
+            d2 = self.Up_conv2(d2)  # 16 224 224
+            # d2->up2+upconv2
+
+            return (e1, e2, e3, e4, e5, d5, d4, d3, d2)
+
+        layer_map = {'224encoder': dim224encoder,
+                     '112encoder': dim112encoder,
+                     '56encoder': dim56encoder,
+                     '28encoder': dim28encoder,
+                     '14encoder': dim14encoder,
+                     '28decoder': dim28decoder,
+                     '56decoder': dim56decoder,
+                     '112decoder': dim112decoder,
+                     '224decoder': dim224decoder}
+        # e1, e2, e3, e4, e5, d5, d4, d3, d2 = dim224decoder()
+        # d1 = self.DeConv_1x1(d2)  # 4 224 224
+        # # d1->Decov1x1
+
+        return layer_map[str(layer_dim + codec)]()
+
+    def forward2(self, in_tup, layer_dim, codec, return_features=False):
+
+        def dim224encoder_in(in_tup):
+            e1 = in_tup
+
+            e2 = self.Maxpool1(in_tup)
+            e2 = self.Conv2(e2)  # 32 112 112
+            # e2 -> Conv2
+
+            in_tup = in_tup + (e2, )
+            return dim112encoder_in(in_tup)
+
+        def dim112encoder_in(in_tup):
+            e1, e2 = in_tup
+
+            e3 = self.Maxpool2(e2)
+            e3 = self.Conv3(e3)  # 64 56 56
+            # e3->Conv3
+
+            in_tup = in_tup + (e3, )
+            return dim56encoder_in(in_tup)
+
+        def dim56encoder_in(in_tup):
+            e1, e2, e3 = in_tup
+
+            e4 = self.Maxpool3(e3)
+            e4 = self.Conv4(e4)  # 128 28 28
+            # e4->Conv4
+
+            in_tup = in_tup + (e4, )
+            return dim28encoder_in(in_tup)
+
+        def dim28encoder_in(in_tup):
+            e1, e2, e3, e4 = in_tup
+
+            e5 = self.Maxpool4(e4)
+            e5 = self.Conv5(e5)  # 256 14 14
+            # e5->Conv5
+
+            in_tup = in_tup + (e5, )
+            return dim14decoder_in(in_tup)
+
+        # decoding + concat path
+        def dim14decoder_in(in_tup):
+            e1, e2, e3, e4, e5 = in_tup
+
+            d5 = self.Up5(e5)
+            d5 = torch.cat((e4, d5), dim=1)
+            d5 = self.Up_conv5(d5)  # 128 28 28
+            # d5->Up5+Up_conv5
+
+            in_tup = in_tup + (d5, )
+            return dim28decoder_in(in_tup)
+
+        def dim28decoder_in(in_tup):
+            e1, e2, e3, e4, e5, d5 = in_tup
+
+            d4 = self.Up4(d5)
+            d4 = torch.cat((e3, d4), dim=1)
+            d4 = self.Up_conv4(d4)  # 64 56 56
+            # d4->Up4+Up_conv4
+
+            in_tup = in_tup + (d4, )
+            return dim56decoder_in(in_tup)
+
+        def dim56decoder_in(in_tup):
+            e1, e2, e3, e4, e5, d5, d4 = in_tup
+
+            d3 = self.Up3(d4)
+            d3 = torch.cat((e2, d3), dim=1)
+            d3 = self.Up_conv3(d3)  # 32 112 112
+            # d3->Up3+upconv3
+
+            in_tup = in_tup + (d3, )
+            return dim112decoder_in(in_tup)
+
+        def dim112decoder_in(in_tup):
+            e1, e2, e3, e4, e5, d5, d4, d3 = in_tup
+
+            d2 = self.Up2(d3)
+            d2 = torch.cat((e1, d2), dim=1)
+            d2 = self.Up_conv2(d2)  # 16 224 224
+            # d2->up2+upconv2
+
+            d1 = self.DeConv_1x1(d2)  # 4 224 224
+            # d1->Decov1x1
+
+            return d1
+
+        layer_map = {'224encoder': dim224encoder_in,
+                     '112encoder': dim112encoder_in,
+                     '56encoder': dim56encoder_in,
+                     '28encoder': dim28encoder_in,
+                     '14encoder': dim14decoder_in,
+                     '28decoder': dim28decoder_in,
+                     '56decoder': dim56decoder_in,
+                     '112decoder': dim112decoder_in
+                     }
+
+        return layer_map[str(layer_dim + codec)](in_tup)
+
+
+
     def disable_grad_encoder(self):
         self._set_grad(self.encoder_names, False)
 

@@ -10,27 +10,47 @@ from contrastyou.arch.conv_rnn import CLSTM_cell3
 
 class LSTM_Corrected_Unet(nn.Module):
 
-    def __init__(self, *, input_dim=3, num_classes=1, num_features=32, seq_len=3, detach=False, **kwargs):
+    def __init__(self, *, layer_dim, codec, input_dim=3, num_classes=1, num_features,
+                          seq_len=3, detach=False, iter_to_use, **kwargs):
         super().__init__()
         self._unet = UNet(input_dim=input_dim, num_classes=num_classes)
         self._correct_model = CLSTM_cell3(
-            shape=(224, 224,),
+            shape=(layer_dim, layer_dim,),
             input_channels=input_dim,
             filter_size=3,
-            class_num=num_classes,
+            class_num=num_features,
             num_features=num_features
         )
+        self._codec = codec
+        self._layer_dim = layer_dim
         self._seq_len = seq_len
         self._detach = detach
+        self._iter_to_use = iter_to_use
 
     def forward(self, x):
-        logits = self._unet(x)
+        seg1_out = self._unet.forward1(x, layer_dim = str(self._layer_dim), codec = self._codec)
+        if len(seg1_out) != 1:
+            last_logit = seg1_out[-1]
+        else:
+            last_logit = seg1_out
 
+        seg1_out = seg1_out[:-1]
+
+        batch_copy = x
+        resized_x = torch.nn.functional.interpolate(batch_copy, size = self._layer_dim)
+        #breakpoint()
         errors, corrected_logits = self._correct_model(
-            x,
-            logits.detach() if self._detach else logits,
+            resized_x,
+            last_logit.detach() if self._detach else last_logit,
             seq_len=self._seq_len)
+
+
+        bb_out = seg1_out + (corrected_logits[:, self._iter_to_use-1, :, :, :], )
+        logits = self._unet.forward2(bb_out, layer_dim = str(self._layer_dim), codec = self._codec)
+
         return logits, corrected_logits, errors
+
+
 
     @property
     def num_classes(self):

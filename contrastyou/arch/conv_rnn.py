@@ -305,7 +305,7 @@ class CLSTM_cell3(nn.Module):
             nn.Conv2d(self.input_channels + self.num_features + self.class_num,
                       4 * self.num_features, self.filter_size, (1, 1),
                       self.padding),
-            nn.GroupNorm(4 * self.num_features // 32, 4 * self.num_features))
+            nn.GroupNorm(4 * self.num_features // self.num_features, 4 * self.num_features))
         self.squeeze = nn.Sequential(nn.Conv2d(self.num_features, class_num, (1, 1), ),
                                      )
 
@@ -329,6 +329,7 @@ class CLSTM_cell3(nn.Module):
                 cur_logits = logits
                 # norm_cur_logits = self.zero_one_normalize(cur_logits)
                 norm_cur_logits = cur_logits
+
                 state_input = torch.cat([image, norm_cur_logits], dim=1)
             else:
                 cur_logits = logits + sum(errors)
